@@ -1,0 +1,46 @@
+[package]
+name = "veil7"
+version = "0.1.0"
+edition = "2021"
+description = "Stateless 7-layer universal post-quantum verification engine. No log, no metadata, no trace, auto-zeroise."
+publish = false
+
+[lib]
+name = "veil7"
+path = "src/lib.rs"
+
+[[bin]]
+name = "veil7"
+path = "src/main.rs"
+
+[dependencies]
+# --- Entropy: OS CSPRNG (pure syscall on Android, no C deps) ---
+getrandom = "0.2"
+
+# --- Memory locking: mlock/munlock syscalls (already in tree via getrandom) ---
+libc = "0.2"
+
+# --- Post-Quantum primitives (pure Rust, RustCrypto) ---
+ml-kem = { version = "0.3", features = ["hazmat", "zeroize"] }  # ML-KEM-768 (FIPS 203)
+ml-dsa = "0.1"                                                  # ML-DSA-65  (FIPS 204)
+
+# --- Hashing / XOF (post-quantum sound, domain separation) ---
+sha3 = "0.10"   # SHAKE256 XOF
+
+# --- Memory hygiene + constant-time ---
+zeroize = { version = "1", features = ["derive"] }
+subtle = "2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"     # no unwind, no backtrace trace
+strip = true        # strip symbols -> no metadata in binary
+overflow-checks = true
+debug = false
+debug-assertions = false
+
+[profile.dev]
+debug = false       # no debuginfo trace even in dev
+# no panic="abort" here -- the test harness needs unwind
