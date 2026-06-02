@@ -1,0 +1,15 @@
+version: 1
+repair:
+  auto_fix: true
+  confidence_threshold: 0.80
+  max_retries: 1
+quality_gates:
+  min_confidence: 0.85
+  require_tests: true
+  max_patch_lines: 30
+  block_on_security: true
+review:
+  auto_comment: true
+  severity_labels: true
+ignore:
+  paths: ["target/**", "*.lock"]
