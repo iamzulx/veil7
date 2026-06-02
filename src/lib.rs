@@ -24,7 +24,7 @@
 //   pq_backends/  formal PQ signature backends (SLH-DSA, …)
 //
 pub mod common;
-pub mod execution;
+pub     mod    execution;
 pub   mod   layers;
 pub mod pipeline;
 pub mod pq_backends;
