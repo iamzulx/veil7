@@ -24,8 +24,8 @@
 //   pq_backends/  formal PQ signature backends (SLH-DSA, …)
 //
 pub mod common;
-pub     mod    execution;
-pub   mod   layers;
+pub mod execution;
+pub mod layers;
 pub mod pipeline;
 pub mod pq_backends;
 pub mod relations;
@@ -53,4 +53,3 @@ pub use layers::l7_emit;
 // ── Primary public API ────────────────────────────────────────────────────────
 pub use layers::l7_emit::Verdict;
 pub use pipeline::{verify_once, Claim};
-    
