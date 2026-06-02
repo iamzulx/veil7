@@ -1,6 +1,6 @@
 //! veil7 — stateless 7-layer universal post-quantum verification engine.
 //!
-//! Invariants (enforced by construction, not by policy):
+//! Invariants (enforced by construction, not by policy):  
 //!   * NO LOG      — no logging crate is a dependency; nothing is ever written to stdout/stderr/files.
 //!   * NO METADATA — verdicts carry a single bit + a transient public transcript hash, no IDs/timestamps/counters.
 //!   * NO TRACE    — release profile: panic=abort, strip, no debuginfo. No global/static mutable state.
