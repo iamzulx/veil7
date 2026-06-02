@@ -23,6 +23,7 @@ libc = "0.2"
 # --- Post-Quantum primitives (pure Rust, RustCrypto) ---
 ml-kem = { version = "0.3", features = ["hazmat", "zeroize"] }  # ML-KEM-768 (FIPS 203)
 ml-dsa = "0.1"                                                  # ML-DSA-65  (FIPS 204)
+slh-dsa = { version = "0.2.0-rc.5", default-features = false, features = ["zeroize"] }  # SLH-DSA-SHAKE-128f (FIPS 205)
 
 # --- Hashing / XOF (post-quantum sound, domain separation) ---
 sha3 = "0.10"   # SHAKE256 XOF

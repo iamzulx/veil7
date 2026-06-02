@@ -17,14 +17,19 @@
 
 // ── Module groups ───────────────────────────────────────────────────────────
 //
-//   common/   foundational shared types (domain tags, error)
+//   common/   foundational shared types (domain tags, error, transcript)
 //   layers/   the verification layers L0..L7, numbered by data-flow position
 //   pipeline  orchestrator that wires L1..L7 into one stateless iteration
+//   relations/  NP-relation trait + concrete relations (hash preimage, merkle, ML-DSA)
+//   pq_backends/  formal PQ signature backends (SLH-DSA, …)
 //
 pub mod common;
+pub mod execution;
 pub mod layers;
 pub mod pipeline;
+pub mod pq_backends;
 pub mod relations;
+pub mod storage;
 
 // ── Compatibility bridges ─────────────────────────────────────────────────────
 //
