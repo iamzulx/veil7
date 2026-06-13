@@ -5,4 +5,4 @@
 
 pub mod vm;
 
-pub use vm::MicroVM;
+pub use vm::{BytecodeBuilder, MicroVM};

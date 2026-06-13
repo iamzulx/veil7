@@ -77,3 +77,4 @@ pub trait Relation {
 pub mod hash_preimage;
 pub mod merkle;
 pub mod ml_dsa;
+pub mod pedersen;

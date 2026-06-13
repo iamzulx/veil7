@@ -73,6 +73,7 @@ pub use l1_entropy::Seed;
 
 #[cfg(feature = "std")]
 pub use pipeline::{
-    prove_and_verify, verify_once, verify_once_with, verify_once_with_oram, verify_once_with_vm,
+    prove_and_verify, verify_batch, verify_once, verify_once_with, verify_once_with_oram,
+    verify_once_with_vm,
 };
 pub use pipeline::{prove_and_verify_with_entropy, verify_once_with_seed};

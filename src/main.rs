@@ -94,6 +94,37 @@ fn main() {
             let sub = args.get(2).map(|s| s.as_str()).unwrap_or("");
             run_prove(sub, &args[3..]);
         }
+        "batch-sign" => {
+            // Each remaining argument is one claim to attest.
+            let claims: Vec<veil7::Claim<'_>> = args[2..]
+                .iter()
+                .map(|s| veil7::Claim::new(s.as_bytes()))
+                .collect();
+            match veil7::verify_batch(&claims) {
+                Ok(v) => {
+                    let valid = v.is_valid_bool() as u8;
+                    let tx = hex(v.transcript());
+                    println!("valid={} transcript={} count={}", valid, tx, claims.len());
+                }
+                Err(_) => println!("valid=0 transcript=-"),
+            }
+        }
+        "vm-execute" => {
+            // Argument: hex-encoded bytecode.
+            let hex_code = args.get(2).map(|s| s.as_str()).unwrap_or("");
+            match hex_decode(hex_code) {
+                Some(code) => {
+                    let mut vm = veil7::execution::MicroVM::new();
+                    let root = vm.execute(&code);
+                    if root == [0u8; 64] {
+                        println!("valid=0 transcript=-");
+                    } else {
+                        println!("valid=1 root={}", hex64(&root));
+                    }
+                }
+                None => println!("valid=0 transcript=-"),
+            }
+        }
         "help" => print_help(),
         _ => print_help(),
     }
@@ -217,6 +248,33 @@ fn run_prove(relation: &str, rest: &[String]) {
                 Err(_) => println!("valid=0 transcript=-"),
             }
         }
+        "pedersen" => {
+            // Arguments: <hex_value> <hex_blinding> — two 64-char hex strings.
+            // Runs the Pedersen commitment opening relation.
+            let hex_value = rest.first().map(|s| s.as_str()).unwrap_or("");
+            let hex_blinding = rest.get(1).map(|s| s.as_str()).unwrap_or("");
+            let value = match parse_hex_root(hex_value) {
+                Some(v) => v,
+                None => {
+                    println!("valid=0 transcript=-");
+                    return;
+                }
+            };
+            let blinding = match parse_hex_root(hex_blinding) {
+                Some(b) => b,
+                None => {
+                    println!("valid=0 transcript=-");
+                    return;
+                }
+            };
+            let witness = veil7::relations::pedersen::Witness { value, blinding };
+            match veil7::prove_and_verify::<veil7::relations::pedersen::PedersenCommitment>(
+                &witness, b"",
+            ) {
+                Ok(v) => print_verdict(&v),
+                Err(_) => println!("valid=0 transcript=-"),
+            }
+        }
         _ => print_help(),
     }
 }
@@ -229,6 +287,17 @@ fn print_verdict(v: &veil7::Verdict) {
 
 fn hex(b: &[u8; 32]) -> String {
     let mut s = String::with_capacity(64);
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    for &byte in b.iter() {
+        s.push(HEX[(byte >> 4) as usize] as char);
+        s.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    s
+}
+
+/// Encode a 64-byte array as 128 hex chars.
+fn hex64(b: &[u8; 64]) -> String {
+    let mut s = String::with_capacity(128);
     const HEX: &[u8; 16] = b"0123456789abcdef";
     for &byte in b.iter() {
         s.push(HEX[(byte >> 4) as usize] as char);
@@ -281,5 +350,9 @@ fn hex_nibble(b: u8) -> Option<u8> {
 
 fn print_help() {
     eprintln!("veil7");
-    eprintln!("sign <text> | sign-file <path> | sign-stream <path> | chain <ev>.. | chain-root <ev>.. | verify <hex> <ev>.. | prove <rel> <args>.. | help");
+    eprintln!("sign <text> | sign-file <path> | sign-stream <path>");
+    eprintln!("chain <ev>.. | chain-root <ev>.. | verify <hex> <ev>..");
+    eprintln!("prove <rel> <args>.. | prove pedersen <hex_value> <hex_blinding>");
+    eprintln!("batch-sign <text1> <text2>.. | vm-execute <hex_bytecode>");
+    eprintln!("help");
 }

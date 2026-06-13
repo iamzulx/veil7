@@ -61,3 +61,12 @@ pub const LAMPORT_PUBNODE: &[u8] = b"veil7:rel:lamport:pubnode:v1";
 pub const MERKLE_LEAF: &[u8] = b"veil7:rel:merkle:leaf:v1";
 /// Merkle inclusion relation: internal node hashing.
 pub const MERKLE_NODE: &[u8] = b"veil7:rel:merkle:node:v1";
+
+/// Pedersen commitment opening relation: domain tag for the commitment hash.
+pub const PEDERSEN_OPEN: &[u8] = b"veil7:rel:pedersen:open:v1";
+
+// ── Batch verification (pipeline::verify_batch) ─────────────────────────────
+/// Initial protocol binding for the batch transcript accumulator.
+pub const BATCH_HEAD: &[u8] = b"veil7:batch:head:v1";
+/// Per-step frame absorbed before each individual verdict transcript.
+pub const BATCH_STEP: &[u8] = b"veil7:batch:step:v1";

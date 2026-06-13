@@ -80,6 +80,21 @@ impl Verdict {
         Verdict { valid, transcript }
     }
 
+    /// Construct a batch verdict from an aggregated validity choice and
+    /// a pre-computed 32-byte batch transcript.
+    ///
+    /// Used by `verify_batch`: the batch transcript is a SHAKE256 fold of
+    /// individual verdict transcripts, so it uniquely identifies the claim
+    /// set without per-claim metadata.
+    #[cfg(feature = "std")]
+    pub(crate) fn from_batch(valid: Choice, batch_transcript: &[u8; 32]) -> Self {
+        compiler_fence(Ordering::SeqCst);
+        Verdict {
+            valid,
+            transcript: *batch_transcript,
+        }
+    }
+
     /// Was the claim verified? Returns a constant-time `Choice`.
     #[inline]
     pub fn is_valid(&self) -> Choice {

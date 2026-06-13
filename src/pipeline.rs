@@ -248,8 +248,58 @@ pub fn verify_once_with_vm(claim: &Claim<'_>) -> Result<Verdict, VeilError> {
     verify_once_with_seed::<MlDsaProver, MlDsaVerifier>(seed, claim)
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Batch verification (multiple claims, single aggregated Verdict)
+// ═══════════════════════════════════════════════════════════════════════════
+
 #[cfg(feature = "std")]
 use crate::l0_memlock::zeroize_bytes;
+
+/// Run `verify_once` on each claim independently and return a single
+/// aggregated `Verdict`.
+///
+/// Each claim gets its own ephemeral identity (fresh entropy, fresh
+/// keypair, full L1→L7 cycle). The validity bits are AND-combined
+/// (all must be valid), and the transcript hashes are folded through
+/// a domain-separated SHAKE256 accumulator into a single 32-byte
+/// batch transcript.
+///
+/// **Statelessness preserved**: no state leaks between iterations.
+/// **Fail-closed**: if any single iteration returns `Err`, the entire
+/// batch returns `Err`. Empty input returns `Err`.
+///
+/// Privacy: the batch transcript is a deterministic fold of individual
+/// transcripts, so it uniquely identifies the set of claims without
+/// leaking per-claim validity (the AND-bit is the only aggregate signal).
+#[cfg(feature = "std")]
+pub fn verify_batch(claims: &[Claim<'_>]) -> Result<Verdict, VeilError> {
+    if claims.is_empty() {
+        return Err(VeilError::Crypto);
+    }
+
+    let mut all_valid = subtle::Choice::from(1u8);
+    let mut batch_xof = sha3::Shake256::default();
+    use sha3::digest::{ExtendableOutput, Update, XofReader};
+    batch_xof.update(crate::common::domain::BATCH_HEAD);
+
+    for (i, claim) in claims.iter().enumerate() {
+        let verdict = verify_once(claim)?;
+        all_valid &= subtle::Choice::from(verdict.is_valid_bool() as u8);
+
+        // Fold each verdict's transcript into the batch accumulator
+        // with domain-separated framing (index + transcript).
+        batch_xof.update(crate::common::domain::BATCH_STEP);
+        batch_xof.update(&(i as u64).to_le_bytes());
+        batch_xof.update(verdict.transcript());
+    }
+
+    // Derive the batch transcript (32 bytes).
+    let mut batch_transcript = [0u8; 32];
+    let mut reader = batch_xof.finalize_xof();
+    reader.read(&mut batch_transcript);
+
+    Ok(Verdict::from_batch(all_valid, &batch_transcript))
+}
 
 #[cfg(test)]
 mod tests {
