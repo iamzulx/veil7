@@ -81,7 +81,7 @@ where
 
     for h in handles {
         h.join()
-            .expect(&format!("[{label}] thread {0} panicked", ""));
+            .unwrap_or_else(|_| panic!("[{label}] thread panicked"));
     }
     println!(
         "[{label}] completed: {n_threads} threads × {iterations} iterations = {} ops",
