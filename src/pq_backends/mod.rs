@@ -16,4 +16,5 @@
 //!   the activation checklist.
 
 pub mod fn_dsa;
+pub mod libcrux_backend;
 pub mod slh_dsa;
