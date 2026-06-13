@@ -103,6 +103,12 @@ analysis on the target CPU class:
 - Target-specific disassembly review for secret-key operations in dependencies.
 - Tests on the intended ARM core, frequency governor, and compiler version.
 
+**Cache timing / T-table gap:** `sha3` 0.10 uses a T-table Keccak
+implementation. Per-call lookup-table access patterns can leak absorbed
+secret bytes on shared-cache hardware. The threat is documented in
+`SPEC-HARDENING.md` §"Cache timing and T-table side channels". Phase 2
+budgets a `dudect`/`ctverif` validation sprint for the target arch.
+
 ## Reporting issues
 
 Do not include secrets, private keys, seed bytes, or full memory dumps in reports.

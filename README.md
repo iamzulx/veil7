@@ -61,6 +61,31 @@ Numbered by data-flow position in one iteration:
 | L6    | `l6_zeroise`    | Explicit scrub barrier — consume and wipe all key material |
 | L7    | `l7_emit`       | Emit the traceless `Verdict` (one bit + 32-byte transcript hash) |
 
+## Multi-source entropy harvest
+
+L1 ships two entropy workflows:
+
+1. **12-round mix** — `harvest()` runs 12 iterations of
+   `harvest → hash → slice → rehash → fold`, finishing with a
+   SHAKE256 uniformisation directly into a `Locked<64>` buffer.
+2. **Multi-source** — `harvest_multi_source()` reads from **six
+   genuinely independent sources** (G1 privacy-core inspired) and
+   whitens each one through a domain-separated SHAKE256 before XORing
+   into the pool:
+
+   - `os_csprng_primary` — 64 bytes from `getrandom`
+   - `os_csprng_secondary` — separate `getrandom` call
+   - `wall_clock` — `SystemTime::now()` nanoseconds
+   - `stack_addr` — pointer to a stack-local variable
+   - `thread_id` — hashed `std::thread::current().id()`
+   - `hw_counter` — `Instant::elapsed()` ⊕ wall-clock nanos
+
+Every source carries its own domain tag, so `raw_i` never appears
+unmixed in the pool. Even if an attacker knows the final seed and all
+but one source, they cannot recover the missing source (compositional
+preimage property of SHAKE256). Each source auto-wipes on drop via
+`#[inline(never)]` + `compiler_fence`. See `src/entropy_sources.rs`.
+
 ## Universal verification
 
 Beyond the fixed ML-DSA pipeline (`verify_once`), the engine has a generic
@@ -193,10 +218,10 @@ want to compose them into their own pipelines.
 
 ## Post-quantum alignment (NIST 2025-2026 roadmap)
 
-veill7 uses the canonical finalized NIST post-quantum standards as its
+veil7 uses the canonical finalized NIST post-quantum standards as its
 cryptographic substrate:
 
-| Standard | Algorithm | Security | Status (Juni 2026) | veill7 backend |
+| Standard | Algorithm | Security | Status (Juni 2026) | veil7 backend |
 |---|---|---|---|---|
 | [FIPS 202](https://nvlpubs.nist.gov/nistpubs/fips/nist.fips.202.pdf) (2015) | SHA-3 / SHAKE256 | 256-bit hash | Final | `sha3 0.10.9` |
 | [FIPS 203](https://csrc.nist.gov/pubs/fips/203/final) (Aug 13, 2024) | ML-KEM-768 | NIST Cat 3 (~192-bit PQ) | **Final** | `ml-kem 0.3.2` |
@@ -243,7 +268,7 @@ src/pq_backends/
 
 ### Quantum-vulnerable algorithms not used
 
-veill7 contains **zero** classical primitives (no RSA, ECDSA, EdDSA,
+veil7 contains **zero** classical primitives (no RSA, ECDSA, EdDSA,
 X25519, classical DH, AES as a long-term-secret primitive, etc.).
 All long-term-secret protection is via Cat-3 lattice schemes
 (ML-KEM/ML-DSA) plus SHAKE256 hashing. Per NIST IR 8547, the
@@ -312,6 +337,13 @@ Phase 1 hardening is tracked in `SECURITY.md` and `SPEC-HARDENING.md`:
 - `unsafe` is confined to `src/layers/l0_memlock.rs`.
 - CI includes hardening guards and `cargo-audit`.
 
+**Cache timing / T-table gap (documented, not patched):**
+`sha3` 0.10 is a T-table Keccak implementation. Per-call lookup-table
+access patterns can leak absorbed secrets on shared-cache hardware
+co-resident VMs. Every SHAKE256 call site carries a `// SIDE-CHANNEL:`
+comment pointing to `SPEC-HARDENING.md`. A Phase 2 `dudect`/`ctverif`
+sprint is budgeted for empirical validation. See SPEC-HARDENING.md.
+
 ## Honesty / scope
 
 This is a research/educational construction. It is correct and tested, but:
@@ -323,6 +355,11 @@ This is a research/educational construction. It is correct and tested, but:
 - "Constant-time" relies on `subtle`, veil7 source guards, and the underlying
   crates' own CT behavior; it has not been verified against a hardware
   side-channel model.
+- **Cache timing:** `sha3` 0.10 is a T-table Keccak. On shared-cache hardware
+  (co-resident VMs, same-core L3), per-call SHAKE256 timing patterns can leak
+  the absorbed secret. See `SPEC-HARDENING.md` §"Cache timing and T-table side
+  channels". Risk is LOW on single-tenant devices; MEDIUM-HIGH on cloud; HIGH
+  on multi-tenant bare-metal. Phase 1 does not patch this upstream concern.
 
 Do not use this to protect real production secrets. It is a clean, working
 demonstration of the architecture, not a vetted security product.
@@ -336,10 +373,11 @@ src/
   main.rs           demo binary (the only thing that prints)
   pipeline.rs       stateless L1->L7 orchestration + generic relation pipeline
   interface.rs      std-gated one-call facade (attest_bytes/text/file/chain)
+  entropy_sources.rs multi-method entropy harvest (per-method untraceability)
   common/           domain tags, error type, Fiat-Shamir transcript
   layers/           L0..L7
   relations/        Relation trait + hash_preimage, merkle, ml_dsa
-  pq_backends/      SLH-DSA backend
+  pq_backends/      SLH-DSA backend + FALCON scaffold
   storage/          ObliviousRAM
   execution/        MicroVM
 tests/
