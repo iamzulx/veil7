@@ -49,7 +49,15 @@ Untuk masuk production, ada **4 fase** yang harus dilalui.
 - Benchmark: target < 100ms per verify_once
 ```
 
-**Status:** ✅ ADAPTER MODULE COMPLETE — `src/pq_backends/libcrux_backend.rs` (11/11 tests pass). ML-KEM-768 + ML-DSA-65 via libcrux 0.0.9 (hax/F* verified). Compiles on aarch64-android. Next: wire adapter into l2_keygen.rs → l4_prove.rs → l5_verify.rs.
+**Status:** ✅ COMPLETE — L2/L3/L4/L5 fully migrated to libcrux
+
+- `src/pq_backends/libcrux_backend.rs` — adapter module (11 tests)
+- `src/layers/l2_keygen.rs` — EphemeralKeys uses libcrux key pairs + Drop impl
+- `src/layers/l3_commit.rs` — commitment uses libcrux key serialization
+- `src/layers/l4_prove.rs` — Proof wraps MLDSA65Signature + Drop impl
+- `src/layers/l5_verify.rs` — verify + KEM roundtrip via libcrux
+- 347/347 tests pass (all layers verified end-to-end)
+- fmt clean, clippy clean, no_std clean, release build clean
 
 ### 1.2 — CAVP Algorithm Validation (HIGH 🟠)
 
