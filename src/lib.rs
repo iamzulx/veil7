@@ -25,15 +25,21 @@ extern crate alloc;
 //   relations/  NP-relation trait + concrete relations (hash preimage, merkle, ML-DSA)
 //   pq_backends/  formal PQ signature backends (SLH-DSA, …)
 //
+pub mod blind;
 pub mod chain;
+pub mod commit_reveal;
 pub mod common;
 pub mod entropy_sources;
 pub mod execution;
+pub mod hybrid;
+pub mod keccak_ct;
 pub mod layers;
 pub mod pipeline;
 pub mod pq_backends;
 pub mod relations;
+pub mod shamir;
 pub mod storage;
+pub mod threshold;
 
 #[cfg(feature = "std")]
 pub mod interface;

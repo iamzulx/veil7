@@ -34,9 +34,15 @@ src/
   interface.rs        std-gated one-call facade (18 functions)
   chain.rs            tamper-evident event chain (no_std available)
   entropy_sources.rs  multi-method entropy harvest (6 independent sources)
+  blind.rs            blind attestation (engine never sees plaintext)
+  commit_reveal.rs    two-phase commit-reveal protocol
+  hybrid.rs           hybrid PQ+classical dual-layer attestation
+  keccak_ct.rs        constant-time masked SHAKE256 wrapper
+  shamir.rs           Shamir secret sharing for entropy splitting
+  threshold.rs        N-of-M threshold verification
   common/             domain tags, error type, Fiat-Shamir transcript
   layers/             L0..L7 (entropy → zeroise → emit)
-  relations/          Relation trait + hash_preimage, merkle, ml_dsa, pedersen
+  relations/          Relation trait + hash_preimage, merkle, ml_dsa, pedersen, range_proof
   pq_backends/        formal PQ signature backends (SLH-DSA, …)
   storage/            ORAM (ObliviousRAM + read_modify_write + swap)
   execution/          MicroVM (17-opcode stack machine + BytecodeBuilder)
@@ -62,11 +68,12 @@ Beyond the fixed ML-DSA pipeline (`verify_once`), the engine has a generic
 and verifies it via Fiat-Shamir. Swap the relation, the verification path is
 unchanged.
 
-Four working relations ship as proof of generality:
+Five working relations ship as proof of generality:
 - `hash_preimage` — Lamport-style proof of knowledge
 - `ml_dsa` — ML-DSA-65 lattice-signature knowledge
 - `merkle` — Merkle-tree set membership
 - `pedersen` — SHAKE256 commitment opening (value + blinding)
+- `range_proof` — prove value in [min, max] without revealing it
 
 ## Dependencies policy
 

@@ -65,6 +65,9 @@ pub const MERKLE_NODE: &[u8] = b"veil7:rel:merkle:node:v1";
 /// Pedersen commitment opening relation: domain tag for the commitment hash.
 pub const PEDERSEN_OPEN: &[u8] = b"veil7:rel:pedersen:open:v1";
 
+/// Range proof relation: per-bit commitment domain tag.
+pub const RANGE_BIT: &[u8] = b"veil7:rel:range:bit:v1";
+
 // ── Batch verification (pipeline::verify_batch) ─────────────────────────────
 /// Initial protocol binding for the batch transcript accumulator.
 pub const BATCH_HEAD: &[u8] = b"veil7:batch:head:v1";

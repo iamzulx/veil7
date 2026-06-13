@@ -11,12 +11,12 @@ metadata, no trace, no persisted state.
 Verified on aarch64-android (Termux), Rust 1.95.0:
 
 - `cargo build` / `cargo build --release` — clean
-- `cargo test` — **222 tests** (174 unit + 48 integration/doc), all passing
+- `cargo test` — **265 tests** (217 unit + 48 integration/doc), all passing
 - `cargo clippy --all-targets -- -D warnings` — clean (zero warnings)
 - `cargo fmt --check` — clean
 - `cargo check --no-default-features` — clean (`#![no_std]` + `alloc` compatible)
 - Release binary: ~480 KB, stripped (no symbols)
-- ~8 200 lines of Rust
+- ~9 900 lines of Rust
 
 ## Design invariants
 

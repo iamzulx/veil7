@@ -55,3 +55,9 @@ debug = "line-tables-only"
 [profile.dev]
 debug = false       # no debuginfo trace even in dev
 # no panic="abort" here -- the test harness needs unwind
+
+# ── WASM target ──────────────────────────────────────────────────────────────
+# Build for browser/serverless with:
+#   cargo build --target wasm32-unknown-unknown --no-default-features
+# The no_std build is WASM-compatible. Entropy must be supplied externally
+# (e.g. via crypto.getRandomValues() in the browser).

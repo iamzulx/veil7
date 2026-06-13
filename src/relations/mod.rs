@@ -78,3 +78,4 @@ pub mod hash_preimage;
 pub mod merkle;
 pub mod ml_dsa;
 pub mod pedersen;
+pub mod range_proof;
