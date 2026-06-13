@@ -36,7 +36,7 @@ libcrux-ml-kem = { version = "0.0.9", features = ["mlkem768"] }  # ML-KEM-768 (F
 libcrux-ml-dsa = { version = "0.0.9", features = ["mldsa65"] } # ML-DSA-65  (FIPS 204, hax/F* verified)
 
 # --- Hashing / XOF (post-quantum sound, domain separation) ---
-sha3 = "0.10"   # SHAKE256 XOF
+sha3 = "0.11"   # SHAKE256 XOF
 
 # --- Memory hygiene + constant-time ---
 zeroize = { version = "1", features = ["derive"] }
