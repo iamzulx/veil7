@@ -33,4 +33,8 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit --version 0.22.2 --locked
       - name: Audit dependency advisories
-        run: cargo audit --deny warnings
+        run: cargo audit --deny warnings --ignore RUSTSEC-2026-0173
+        # RUSTSEC-2026-0173: proc-macro-error2 unmaintained
+        # Transitive dep of libcrux (hax-lib-macros → proc-macro-error2).
+        # Compile-time proc-macro only, no runtime impact. Cannot be resolved
+        # until libcrux upstream updates hax-lib dependency.
