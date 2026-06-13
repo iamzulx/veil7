@@ -38,3 +38,17 @@ jobs:
         # Transitive dep of libcrux (hax-lib-macros → proc-macro-error2).
         # Compile-time proc-macro only, no runtime impact. Cannot be resolved
         # until libcrux upstream updates hax-lib dependency.
+
+  sbom:
+    name: SBOM Generation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Generate SBOM
+        run: bash scripts/generate-sbom.sh sbom.json
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json

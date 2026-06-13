@@ -103,6 +103,10 @@ impl Drop for BlindFactor {
 ///
 /// Returns the blinded claim bytes. The caller sends these to the engine.
 /// The original claim is not modified.
+///
+/// **Security note:** The blinded output is uniformly random without the
+/// nonce and does not need zeroizing. The `BlindFactor` itself is
+/// `ZeroizeOnDrop` and must be wiped by the caller after use.
 pub fn blind_claim(claim: &[u8], factor: &BlindFactor) -> Vec<u8> {
     let mut blinded = claim.to_vec();
     for (i, b) in blinded.iter_mut().enumerate() {
