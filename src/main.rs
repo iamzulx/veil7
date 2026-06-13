@@ -109,6 +109,49 @@ fn main() {
                 Err(_) => println!("valid=0 transcript=-"),
             }
         }
+        "blind-sign" => {
+            let text = args.get(2).map(|s| s.as_str()).unwrap_or("");
+            match veil7::blind::blind_attest(text.as_bytes()) {
+                Ok((v, unblinded)) => {
+                    let valid = v.is_valid_bool() as u8;
+                    println!(
+                        "valid={} transcript={} unblinded={}",
+                        valid,
+                        hex(v.transcript()),
+                        hex(&unblinded)
+                    );
+                }
+                Err(_) => println!("valid=0 transcript=-"),
+            }
+        }
+        "threshold" => {
+            // threshold <n> <m> <text>
+            let n: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
+            let m: usize = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(0);
+            let text = args.get(4).map(|s| s.as_str()).unwrap_or("");
+            let claim = veil7::Claim::new(text.as_bytes());
+            match veil7::threshold::threshold_verify(&claim, n, m) {
+                Ok(v) => {
+                    let valid = v.is_valid_bool() as u8;
+                    println!(
+                        "valid={} transcript={} n={} m={}",
+                        valid,
+                        hex(v.transcript()),
+                        n,
+                        m
+                    );
+                }
+                Err(_) => println!("valid=0 transcript=-"),
+            }
+        }
+        "hybrid-sign" => {
+            let text = args.get(2).map(|s| s.as_str()).unwrap_or("");
+            let claim = veil7::Claim::new(text.as_bytes());
+            match veil7::hybrid::hybrid_attest(&claim) {
+                Ok(v) => print_verdict(&v),
+                Err(_) => println!("valid=0 transcript=-"),
+            }
+        }
         "vm-execute" => {
             // Argument: hex-encoded bytecode.
             let hex_code = args.get(2).map(|s| s.as_str()).unwrap_or("");
@@ -248,6 +291,19 @@ fn run_prove(relation: &str, rest: &[String]) {
                 Err(_) => println!("valid=0 transcript=-"),
             }
         }
+        "range-proof" => {
+            // Arguments: <value> <min> <max>
+            let value: u64 = rest.first().and_then(|s| s.parse().ok()).unwrap_or(0);
+            let min: u64 = rest.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+            let max: u64 = rest.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
+            let witness = veil7::relations::range_proof::Witness { value, min, max };
+            match veil7::prove_and_verify::<veil7::relations::range_proof::RangeProof>(
+                &witness, b"",
+            ) {
+                Ok(v) => print_verdict(&v),
+                Err(_) => println!("valid=0 transcript=-"),
+            }
+        }
         "pedersen" => {
             // Arguments: <hex_value> <hex_blinding> — two 64-char hex strings.
             // Runs the Pedersen commitment opening relation.
@@ -351,8 +407,12 @@ fn hex_nibble(b: u8) -> Option<u8> {
 fn print_help() {
     eprintln!("veil7");
     eprintln!("sign <text> | sign-file <path> | sign-stream <path>");
+    eprintln!("blind-sign <text> | hybrid-sign <text>");
+    eprintln!("batch-sign <text1> <text2>.. | threshold <n> <m> <text>");
     eprintln!("chain <ev>.. | chain-root <ev>.. | verify <hex> <ev>..");
-    eprintln!("prove <rel> <args>.. | prove pedersen <hex_value> <hex_blinding>");
-    eprintln!("batch-sign <text1> <text2>.. | vm-execute <hex_bytecode>");
+    eprintln!("vm-execute <hex_bytecode>");
+    eprintln!(
+        "prove hash-preimage | ml-dsa | pedersen | range-proof | merkle-root | merkle-include"
+    );
     eprintln!("help");
 }

@@ -36,6 +36,57 @@ Current hardening baseline: **Phase 1 complete for project-owned code**.
 - Custom `Drop` impls are marked `#[inline(never)]`.
 - Public verification boundaries return `subtle::Choice`, not `bool`.
 
+## New module security considerations
+
+### Blind Attestation (`src/blind.rs`)
+- The engine attests data it never sees. The blind factor is held by the
+  caller only; the engine has no access to the original claim.
+- **Threat**: if the blind factor leaks, the blinded claim can be correlated
+  to the original. The factor is `ZeroizeOnDrop` but lives in caller memory.
+- **Mitigation**: callers must wipe the `BlindFactor` after use.
+
+### Commit-Reveal Protocol (`src/commit_reveal.rs`)
+- Two-phase attestation: commit returns a token + nonce, reveal verifies
+  and runs the full pipeline.
+- **Threat**: the nonce must be stored by the caller between phases. If
+  lost, the reveal cannot proceed. If leaked, a third party could replay.
+- **Mitigation**: the engine stores nothing between phases. Nonce security
+  is the caller's responsibility.
+
+### Threshold Verification (`src/threshold.rs`)
+- Runs M independent iterations, requires N valid.
+- **Threat**: if all M iterations run on the same hardware with correlated
+  entropy sources, a single point of failure affects all iterations.
+- **Mitigation**: each iteration harvests fresh entropy independently.
+
+### Shamir Secret Sharing (`src/shamir.rs`)
+- Splits a 64-byte seed into N shares with threshold T reconstruction.
+- **Threat**: shares must be stored securely by the caller. Any T shares
+  reconstruct the full secret.
+- **Mitigation**: shares are `ZeroizeOnDrop`. GF(2^8) arithmetic has no
+  secret-dependent branches or divisions.
+
+### Range Proof (`src/relations/range_proof.rs`)
+- Proves min ≤ value ≤ max via bit-decomposition + per-bit commitments.
+- **Threat**: the proof reveals individual bits within the engine. Only
+  the `Verdict` is emitted.
+- **Mitigation**: all nonces are wiped on drop. Proof is verified within
+  the same stateless iteration.
+
+### Hybrid PQ+Classical (`src/hybrid.rs`)
+- Dual-layer: ML-DSA-65 AND SHAKE256 MAC. Both must be valid.
+- **Threat**: the classical MAC key is derived from the same entropy as
+  PQ keys. If entropy is compromised, both layers fail.
+- **Mitigation**: MAC key is wiped immediately after use. Defense-in-depth
+  ensures that compromising one layer does not compromise the other.
+
+### Constant-Time Keccak (`src/keccak_ct.rs`)
+- Masked sponge approach: XOR input with random mask before SHAKE256.
+- **Threat**: the mask is random per-instance, so T-table access patterns
+  leak masked data, not the original secret.
+- **Mitigation**: mask is `ZeroizeOnDrop`. This is a practical Phase 2
+  mitigation, not a formal proof of constant-time.
+
 ## Pinned dependency posture
 
 Pinned versions from `Cargo.lock`:

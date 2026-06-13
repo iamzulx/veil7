@@ -225,6 +225,13 @@ on shared-cache hardware.
 | `chain.rs` | chain-root accumulator | prior chain state |
 | `execution/vm.rs` | VM state hash (lookup) | VM state bytes |
 | `storage/oram.rs` | ORAM slot hash on read | slot contents, slot address |
+| `blind.rs` | mask derivation, unmask transcript | blind factor, transcript |
+| `commit_reveal.rs` | commitment hash | nonce, claim bytes |
+| `hybrid.rs` | MAC key derivation, MAC computation | seed bytes, claim bytes |
+| `threshold.rs` | transcript aggregation | per-iteration transcripts |
+| `relations/pedersen.rs` | commitment hash | value, blinding factor |
+| `relations/range_proof.rs` | per-bit commitment | bit values, nonces |
+| `keccak_ct.rs` | masked SHAKE256 (mitigation) | masked input (see below) |
 
 The current `sha3` crate (RustCrypto, v0.10 series) is a **plain
 lookup-table** implementation on both x86\_64 and aarch64. It is the
@@ -307,6 +314,27 @@ reasons:
 - ❌ Does not assert cache-timing safety in any acceptance criterion.
 - ❌ Does not run `dudect`/`ctverif` (these require network access
   for advisories and target hardware that is not available in CI).
+
+### Phase 2 partial mitigation: masked sponge (`keccak_ct.rs`)
+
+`src/keccak_ct.rs` implements a **masked sponge** approach as a practical
+Phase 2 mitigation:
+
+1. Before each absorb, the input is XOR'd with a random per-instance mask.
+2. The masked input is fed through the standard `sha3` crate.
+3. The T-table access pattern now leaks the *masked* input, not the
+   original secret. Without the mask, the cache-timing information is
+   useless to an attacker.
+4. The mask is wiped after use.
+
+**Limitations:**
+- Adds ~1 SHAKE256 call per absorb (performance cost ~2x).
+- The masking is applied at the absorb boundary only; the internal Keccak
+  permutation still uses T-tables (but operates on masked data).
+- This is NOT a formal proof of constant-time; it is an empirical
+  side-channel mitigation.
+- `CtShake256` is a drop-in for internal hashing where exact SHAKE256
+  compatibility is not required.
 
 ### Validation path (Phase 2)
 
