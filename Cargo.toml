@@ -20,7 +20,7 @@ std = ["dep:getrandom"]
 
 [dependencies]
 # --- Entropy: OS CSPRNG (pure syscall on Android, no C deps); optional for no_std ---
-getrandom = { version = "0.2", optional = true }
+getrandom = { version = "0.4", optional = true }
 
 # --- Memory locking: mlock/munlock syscalls (already in tree via getrandom) ---
 libc = "0.2"
