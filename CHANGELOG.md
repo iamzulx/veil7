@@ -2,7 +2,125 @@
 
 ## Unreleased
 
+### Added (v0.2.0 development)
+
+- **MicroVM proper opcode execution** (`src/execution/vm.rs`)
+  - Complete rewrite of the execution engine from a byte-XOR stub to a
+    real 17-opcode stack machine with a 128×u64 operand stack.
+  - **12 new opcodes**: `Push` (immediate u64), `Pop`, `Dup`, `Swap`,
+    `And`, `Or`, `Not`, `Shl`, `Shr`, `Rot`, `Eq`, `Lt`. All opcodes
+    are fully interpreted — the VM actually executes them as a stack
+    machine, not just XOR bytes into a buffer.
+  - `BytecodeBuilder` ergonomic API for constructing bytecode from
+    chained method calls (`.push(10).push(20).add().build()`).
+  - Execution trace absorbed into SHAKE256 for deterministic root
+    derivation: same bytecode → same 64-byte root.
+  - All existing safety properties preserved: canary protection,
+    fail-closed on stack overflow/underflow/invalid opcode, auto-zeroise
+    on drop, max 4096 bytes of bytecode.
+  - 22 new unit tests (arithmetic, bitwise, comparison, stack ops,
+    overflow, truncation, determinism, zeroize verification).
+
+- **Pedersen commitment relation** (`src/relations/pedersen.rs`)
+  - New `Relation` implementation: proves knowledge of `(value, blinding)`
+    such that `C = SHAKE256(PEDERSEN_OPEN ‖ value ‖ blinding)`.
+  - Fourth built-in relation alongside `hash_preimage`, `ml_dsa`, and
+    `merkle` — demonstrates a two-part witness structure distinct from
+    the existing three.
+  - Proof contains the full opening (value + blinding); in veil7's
+    stateless model the proof never leaves the engine. Opening is wiped
+    at the L6 barrier.
+  - 8 new unit tests (honest verify, wrong value, wrong blinding,
+    wrong statement, deterministic proof, different witnesses,
+    manual compute match, protocol label uniqueness).
+  - New domain tag `PEDERSEN_OPEN` in `common::domain`.
+
+- **Batch verification** (`src/pipeline.rs`)
+  - `verify_batch(claims: &[Claim]) -> Result<Verdict, VeilError>`
+    processes N claims in independent iterations, each with its own
+    ephemeral identity (fresh entropy, fresh keypair, full L1→L7).
+  - Validity bits AND-combined via `subtle::Choice`.
+  - Transcripts folded through domain-separated SHAKE256 accumulator
+    (`BATCH_HEAD` + `BATCH_STEP` per verdict) into a single 32-byte
+    batch transcript.
+  - `Verdict::from_batch` constructor in `l7_emit` (std-gated).
+  - Empty input returns `VeilError::Crypto` (fail-closed).
+  - New domain tags `BATCH_HEAD` / `BATCH_STEP` in `common::domain`.
+
+- **ORAM extensions** (`src/storage/oram.rs`)
+  - `read_modify_write(addr, f)` — Atomic oblivious read-modify-write.
+    Reads the hashed value at `addr`, applies `f`, re-hashes and writes
+    back — all in a single constant-time pass touching every slot.
+    Returns the post-modification value.
+  - `swap(addr_a, addr_b)` — Oblivious swap of two slots. Reads both
+    values, writes back swapped — single constant-time pass. Self-swap
+    is identity.
+  - Both operations maintain uniform bus traffic (padding touched on
+    every slot) and wipe intermediates on completion.
+  - 6 new unit tests (RMW applies function, RMW on empty slot, RMW
+    isolation, swap exchanges values, swap self is noop, swap isolation).
+
+- **Expanded interface** (`src/interface.rs`) — 12 new one-call functions:
+  - `attest_structured(label, payload)` — attestation with personalization
+    binding (label influences ephemeral identity, not emitted).
+  - `attest_with_vm(bytes)` — attest via MicroVM-bound pipeline.
+  - `attest_with_oram(bytes)` — attest via ORAM-bound pipeline.
+  - `attest_batch(items)` — batch attest multiple byte slices.
+  - `attest_batch_texts(texts)` — batch attest multiple strings.
+  - `attest_chain_files(paths)` — chain-attest multiple files via
+    streaming (file paths absorbed as domain separators).
+  - `attest_directory(dir)` — chain-attest all non-hidden files in a
+    directory (sorted lexicographically).
+  - `attest_file_merkle(paths)` — Merkle-tree attestation of multiple
+    file hashes (supports inclusion proofs).
+  - `prove_hash_preimage(seed)` — one-call Lamport hash preimage proof.
+  - `prove_pedersen(value, blinding)` — one-call Pedersen commitment
+    opening proof.
+  - `prove_merkle(leaves, index)` — one-call Merkle inclusion proof.
+  - `check_chain(events, root)` — pure-math chain integrity oracle.
+  - `check_merkle(leaf, root, index, siblings, leaf_count)` — pure-math
+    Merkle inclusion oracle.
+  - 20 new unit tests for the interface module.
+
+- **CLI additions** (`src/main.rs`)
+  - `veil7 vm-execute <hex_bytecode>` — execute VM bytecode, output
+    deterministic 64-byte root.
+  - `veil7 batch-sign <text1> <text2>..` — batch attest multiple claims,
+    output aggregated Verdict with count.
+  - `veil7 prove pedersen <hex_value> <hex_blinding>` — Pedersen
+    commitment opening proof.
+  - `hex64()` helper for 64-byte (128-char) hex encoding.
+  - Updated help text with all new subcommands.
+
+### Changed
+
+- **Test count**: 165 → **222** (+57 tests: 22 VM, 8 Pedersen, 6 ORAM,
+  20 interface, 1 doc test).
+- **Line count**: ~6 508 → **~8 216** (+1 708 lines of Rust).
+- **Release binary**: ~454 KB → **~480 KB**.
+- **Relations**: 3 → **4** (added `pedersen`).
+- **CLI subcommands**: 8 → **12**.
+- **Interface functions**: 6 → **18**.
+- **MicroVM opcodes**: 5 (uninterpreted) → **17** (fully interpreted).
+- **ORAM operations**: 2 (read/write) → **4** (+ read_modify_write, swap).
+
 ### Documented
+
+- `README.md` — updated status (222 tests, ~8200 lines, ~480KB binary),
+  added MicroVM opcode table, batch verification section, expanded
+  interface table, ORAM extensions, CLI reference (12 commands),
+  updated layout and demo pipelines sections.
+- `CLAUDE.md` — updated architecture diagram (interface, chain,
+  entropy_sources, pedersen, ORAM extensions, 17-opcode VM), updated
+  relations list (4 working relations).
+- `USE_CASES.md` — added 3 new use cases: Batch Attestation (§8),
+  Directory Integrity Anchor (§9), Pedersen Commitment (§10).
+  Updated Quick Reference table (10 use cases).
+- `CHANGELOG.md` — this entry.
+
+---
+
+### Documented (Phase 1 cache timing)
 
 - **Cache timing / T-table threat model for SHAKE256** (`SPEC-HARDENING.md`,
   `CLAUDE.md`, all 12 SHAKE256 call sites)

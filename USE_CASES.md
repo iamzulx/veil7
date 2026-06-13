@@ -254,6 +254,103 @@ store in a plaintext log.
 
 ---
 
+## 8. Batch Attestation (Multi-Claim)
+
+**Who:** Microservices, API gateways, batch processors.
+
+**Problem:** Multiple independent claims need attestation in a single
+operation, producing one aggregated verdict for downstream consumers.
+
+**veil7 solution:**
+- Use `attest_batch` or `verify_batch` to process N claims.
+- Each claim gets its own ephemeral identity (stateless).
+- The batch verdict AND-combines all validity bits and folds transcripts
+  into a single SHAKE256 digest.
+
+**Input:**
+```rust
+let items: &[&[u8]] = &[b"event-A", b"event-B", b"event-C"];
+```
+
+**API:**
+```rust
+let verdict = veil7::interface::attest_batch(items)?;
+assert!(verdict.is_valid_bool()); // all valid → batch valid
+```
+
+**Output:**
+```
+valid=1 transcript=5d1685...067c count=3
+```
+
+**Why veil7:** Stateless — each claim is independent. No shared key or
+session between claims. Aggregated output — one verdict covers all.
+
+---
+
+## 9. Directory Integrity Anchor
+
+**Who:** Configuration management, compliance auditors, deployment verification.
+
+**Problem:** A directory of configuration files needs a single integrity
+anchor that detects any modification, addition, or deletion.
+
+**veil7 solution:**
+- `attest_directory` reads all non-hidden files, sorts by name, and
+  chain-attests them via streaming.
+- The single `Verdict` covers the entire directory state.
+
+**Input:**
+```bash
+veil7 chain-root $(ls /etc/myapp/config/*)
+```
+
+**API:**
+```rust
+let verdict = veil7::interface::attest_directory("/etc/myapp/config")?;
+```
+
+**Why veil7:** One-call directory attestation. Sorted file order is
+cryptographically bound. Streaming — handles large files without
+loading everything into RAM.
+
+---
+
+## 10. Pedersen Commitment (Blinded Value Proof)
+
+**Who:** Voting systems, sealed-bid auctions, privacy-preserving protocols.
+
+**Problem:** Prove knowledge of a committed value without revealing the
+value itself — the commitment uses a blinding factor for hiding.
+
+**veil7 solution:**
+- `prove_pedersen(value, blinding)` proves knowledge of the opening
+  `(value, blinding)` such that `C = SHAKE256(PEDERSEN_OPEN ‖ value ‖ blinding)`.
+- The proof is verified within the engine; only the `Verdict` is emitted.
+
+**Input:**
+```rust
+let value: [u8; 32] = /* secret bid amount */;
+let blinding: [u8; 32] = /* random blinding factor */;
+```
+
+**API:**
+```rust
+let verdict = veil7::interface::prove_pedersen(value, blinding)?;
+assert!(verdict.is_valid_bool());
+```
+
+**Or via CLI:**
+```sh
+veil7 prove pedersen <hex_value> <hex_blinding>
+```
+
+**Why veil7:** The commitment opening never leaves the engine. Stateless
+— each proof uses a fresh ephemeral identity. Post-quantum sound — rests
+on SHAKE256 preimage resistance.
+
+---
+
 ## Quick Reference — API per Use Case
 
 | Use Case | Primary API | Entry Point |
@@ -265,6 +362,9 @@ store in a plaintext log.
 | Embedded (no_std) | `verify_once_with_seed` | `Seed::from_bytes` + `Claim` |
 | CI/CD Attestation | `interface::attest_file` / `sign-file` CLI | Artifact file |
 | Tamper-Evident Log | `verify_once` + store transcript | Log entry bytes |
+| Batch Attestation | `interface::attest_batch` / `batch-sign` CLI | Byte slices |
+| Directory Integrity | `interface::attest_directory` | Directory path |
+| Pedersen Commitment | `interface::prove_pedersen` / `prove pedersen` CLI | value + blinding |
 
 ---
 

@@ -30,13 +30,16 @@ Do not dilute that philosophy for ergonomics, debugging, observability, or frame
 src/
   lib.rs              crate root, invariants, public API
   main.rs             demo binary (the only thing that prints)
-  pipeline.rs         stateless L1→L7 orchestration + generic relation pipeline
+  pipeline.rs         stateless L1→L7 orchestration + generic relation pipeline + batch
+  interface.rs        std-gated one-call facade (18 functions)
+  chain.rs            tamper-evident event chain (no_std available)
+  entropy_sources.rs  multi-method entropy harvest (6 independent sources)
   common/             domain tags, error type, Fiat-Shamir transcript
   layers/             L0..L7 (entropy → zeroise → emit)
-  relations/          Relation trait + hash_preimage, merkle, ml_dsa
+  relations/          Relation trait + hash_preimage, merkle, ml_dsa, pedersen
   pq_backends/        formal PQ signature backends (SLH-DSA, …)
-  storage/            ORAM (ObliviousRAM)
-  execution/          MicroVM (deterministic bytecode executor)
+  storage/            ORAM (ObliviousRAM + read_modify_write + swap)
+  execution/          MicroVM (17-opcode stack machine + BytecodeBuilder)
 ```
 
 Seven layers, numbered by data-flow position in one iteration:
@@ -58,6 +61,12 @@ Beyond the fixed ML-DSA pipeline (`verify_once`), the engine has a generic
 `Relation` trait: define *what* is being proven and the same machinery proves
 and verifies it via Fiat-Shamir. Swap the relation, the verification path is
 unchanged.
+
+Four working relations ship as proof of generality:
+- `hash_preimage` — Lamport-style proof of knowledge
+- `ml_dsa` — ML-DSA-65 lattice-signature knowledge
+- `merkle` — Merkle-tree set membership
+- `pedersen` — SHAKE256 commitment opening (value + blinding)
 
 ## Dependencies policy
 

@@ -11,12 +11,12 @@ metadata, no trace, no persisted state.
 Verified on aarch64-android (Termux), Rust 1.95.0:
 
 - `cargo build` / `cargo build --release` — clean
-- `cargo test` — 165 tests (118 unit + 47 integration), all passing
+- `cargo test` — **222 tests** (174 unit + 48 integration/doc), all passing
 - `cargo clippy --all-targets -- -D warnings` — clean (zero warnings)
 - `cargo fmt --check` — clean
 - `cargo check --no-default-features` — clean (`#![no_std]` + `alloc` compatible)
-- Release binary: ~454 KB, stripped (no symbols)
-- ~3 050 lines of Rust
+- Release binary: ~480 KB, stripped (no symbols)
+- ~8 200 lines of Rust
 
 ## Design invariants
 
@@ -94,12 +94,13 @@ the same machinery proves and verifies it via the Fiat-Shamir transform over a
 shared transcript. Swap the relation, the verification path is unchanged — that
 is what "universal" means here.
 
-Three working relations ship as proof of generality, each a different
+Four working relations ship as proof of generality, each a different
 cryptographic family routed through the *same* `prove_and_verify::<R>` entry:
 
 - `hash_preimage` — pure-hash (Lamport-style) proof of knowledge
 - `ml_dsa` — ML-DSA-65 lattice-signature knowledge
 - `merkle` — Merkle-tree set membership (inclusion proof)
+- `pedersen` — SHAKE256 commitment opening proof (value + blinding factor)
 
 Plus a demo relation for real-data testing:
 - `math_sum` (in `tests/real_data.rs`) — proves knowledge of `a` and `b`
@@ -188,33 +189,120 @@ an explicit chunk size. A CLI entry point is available:
 `veil7 sign-stream <path>` returns the same `valid=1 transcript=<hex>`
 format as `sign` / `sign-file`.
 
-## Universal verification via the CLI
+## MicroVM — deterministic bytecode executor
 
-`prove <relation>` exposes the three built-in `Relation` implementations
-to the shell. Each subcommand takes a hex-encoded witness / proof and
-returns the engine's `valid=<0|1> transcript=<hex>` line.
+The `execution` module ships a real stack machine with **17 opcodes**,
+a canary-protected 128×u64 operand stack, and deterministic execution
+(same bytecode → same 64-byte root). No file I/O, no network, no
+allocation during execution. The entire stack is auto-zeroised on drop.
 
-```sh
-# Lamport hash preimage: prove knowledge of a 32-byte secret.
-veil7 prove hash-preimage 1111...11   # 64 hex chars
-# → valid=1 transcript=5f9eb6...cadd
+| Code | Name | Effect |
+|------|------|--------|
+| 0x00 | Nop  | No operation |
+| 0x01 | Add  | Pop b, a → push a + b (wrapping) |
+| 0x02 | Xor  | Pop b, a → push a ⊕ b |
+| 0x03 | Mul  | Pop b, a → push a × b (wrapping) |
+| 0x04 | Div  | Pop b, a → push a / b (0 if div-by-zero) |
+| 0x05 | Push | Push 8-byte LE u64 immediate |
+| 0x06 | Pop  | Pop and discard top |
+| 0x07 | Dup  | Duplicate top of stack |
+| 0x08 | Swap | Swap top two elements |
+| 0x09 | And  | Bitwise AND |
+| 0x0A | Or   | Bitwise OR |
+| 0x0B | Not  | Bitwise NOT (unary) |
+| 0x0C | Shl  | Shift left (shift & 63) |
+| 0x0D | Shr  | Shift right (shift & 63) |
+| 0x0E | Rot  | Rotate stack: bottom→top |
+| 0x0F | Eq   | Equality → push 1 or 0 |
+| 0x10 | Lt   | Less-than → push 1 or 0 |
 
-# Merkle root: pure-math tree root from a set of leaves.
-veil7 prove merkle-root deadbeef cafebabe 12345678
-# → root=c57652...f80e
+A `BytecodeBuilder` provides ergonomic bytecode construction:
 
-# Merkle inclusion: verify a leaf authenticates against a root.
-veil7 prove merkle-include <hex_leaf> <hex_root> <index> <hex_sib1> [<hex_sib2>..]
-# → valid=1 transcript=<root>   (or valid=0)
-
-# ML-DSA-65 key knowledge: prove knowledge of the seed behind a VK.
-veil7 prove ml-dsa 1111...11
-# → valid=1 transcript=...
+```rust
+use veil7::execution::vm::BytecodeBuilder;
+let code = BytecodeBuilder::new()
+    .push(10)
+    .push(20)
+    .add()       // 30
+    .push(5)
+    .mul()       // 150
+    .build();
+let mut vm = MicroVM::new();
+let root = vm.execute(&code); // deterministic 64-byte root
 ```
 
-The same relations are also reachable as `Relation` trait implementations
-(`veil7::relations::{hash_preimage, merkle, ml_dsa}`) for callers that
-want to compose them into their own pipelines.
+## Batch verification
+
+`verify_batch` processes multiple claims in independent iterations and
+returns a single aggregated `Verdict`. Each claim gets its own ephemeral
+identity (fresh entropy, fresh keypair, full L1→L7 cycle). Validity bits
+are AND-combined; transcripts are folded via domain-separated SHAKE256.
+
+```rust
+use veil7::pipeline::{verify_batch, Claim};
+let claims = [Claim::new(b"alpha"), Claim::new(b"beta")];
+let verdict = verify_batch(&claims)?;
+assert!(verdict.is_valid_bool()); // all valid → batch valid
+```
+
+## Expanded interface (`interface` module)
+
+The `interface` module provides 18 one-call functions covering the full
+API surface:
+
+| Category | Functions |
+|----------|-----------|
+| **Single-item** | `attest_bytes`, `attest_text`, `attest_file`, `attest_file_streaming`, `attest_structured` |
+| **Pipeline variants** | `attest_with_vm`, `attest_with_oram` |
+| **Batch** | `attest_batch`, `attest_batch_texts` |
+| **Chain & directory** | `attest_chain`, `attest_chain_files`, `attest_directory`, `attest_file_merkle` |
+| **Relation proofs** | `prove_hash_preimage`, `prove_pedersen`, `prove_merkle` |
+| **Verification oracles** | `check_chain`, `check_merkle` |
+
+```rust
+use veil7::interface::*;
+
+// Batch attest multiple items
+let v = attest_batch(&[b"item1".as_slice(), b"item2"])?;
+
+// Chain-attest all files in a directory
+let v = attest_directory("/etc/myapp/config")?;
+
+// Merkle-attest multiple files (supports inclusion proofs)
+let v = attest_file_merkle(&["file1.bin", "file2.bin"])?;
+
+// Pure-math verification (no PQ, no entropy)
+assert!(check_chain(events, &published_root));
+```
+
+## ORAM extensions
+
+The `ObliviousRAM` now supports three operations beyond basic read/write:
+
+- **`read_modify_write(addr, f)`** — Atomic oblivious read-modify-write.
+  Reads the value, applies `f`, writes back — all in a single
+  constant-time pass touching every slot.
+- **`swap(addr_a, addr_b)`** — Oblivious swap of two slots in a single
+  constant-time pass.
+
+## CLI reference
+
+```
+veil7 sign <text>              Attest text via ML-DSA pipeline
+veil7 sign-file <path>         Attest file (full load)
+veil7 sign-stream <path>       Attest file (streaming)
+veil7 batch-sign <t1> <t2>..   Batch attest multiple claims
+veil7 chain <ev>..             Chain attestation
+veil7 chain-root <ev>..        Compute chain root (pure math)
+veil7 verify <hex> <ev>..      Verify chain integrity
+veil7 vm-execute <hex>         Execute VM bytecode, output root
+veil7 prove hash-preimage <h>  Lamport hash preimage proof
+veil7 prove ml-dsa <h>         ML-DSA-65 key knowledge proof
+veil7 prove merkle-root <h>..  Compute Merkle root
+veil7 prove merkle-include ..  Verify Merkle inclusion
+veil7 prove pedersen <v> <b>   Pedersen commitment proof
+veil7 help                     Show help
+```
 
 ## Post-quantum alignment (NIST 2025-2026 roadmap)
 
@@ -295,27 +383,33 @@ default) gates OS-dependent entropy harvesting and the demo binary.
   `verify_once_with_seed` / `prove_and_verify_with_entropy`.
 - The demo binary (`main.rs`) requires `std`.
 
-## Demo pipelines (ORAM + MicroVM)
+## Pipeline variants (ORAM + MicroVM)
 
-Two optional paths exercise the `storage` and `execution` modules:
-- `verify_once_with_oram` — stores the harvested seed in `ObliviousRAM` before
-  keygen, reading it back via the constant-time ORAM path.
-- `verify_once_with_vm` — executes the claim bytes through `MicroVM`, using the
-  deterministic VM root as entropy personalization for the iteration.
+Beyond the standard ML-DSA pipeline, three alternative paths are available:
 
-These are demo integrations; they do not change the stateless contract (nothing
-persists between calls).
+| Pipeline | Function | Extra guarantee |
+|----------|----------|-----------------|
+| Standard | `verify_once` | Base stateless verification |
+| ORAM | `verify_once_with_oram` | Hides memory access pattern of seed storage |
+| MicroVM | `verify_once_with_vm` | Binds entropy to VM execution trace |
+| Batch | `verify_batch` | N claims → single aggregated Verdict |
+
+The ORAM now also supports `read_modify_write` (atomic oblivious
+read-modify-write) and `swap` (oblivious slot swap) for practical
+side-channel-resistant storage patterns.
+
+These do not change the stateless contract — nothing persists between calls.
 
 ## Run it
 
 ```sh
-cargo run --release        # demo: runs all four pipelines, prints verdicts
-cargo test                 # full suite (165 tests)
-cargo test --test hardening # side-channel regression guards
-cargo test --test bench     # lightweight iteration benchmarks
+cargo run --release          # demo: runs all four pipelines, prints verdicts
+cargo test                   # full suite (222 tests)
+cargo test --test hardening  # side-channel regression guards
+cargo test --test bench      # lightweight iteration benchmarks
 cargo test --test adversarial # forged-proof negative tests
 cargo test --test fuzz_manual # random-input stress test
-cargo test --test real_data   # real .txt file + custom MathSum relation
+cargo test --test real_data  # real .txt file + custom MathSum relation
 cargo clippy --all-targets -- -D warnings
 bash scripts/check-hardening.sh
 ```
@@ -368,26 +462,26 @@ demonstration of the architecture, not a vetted security product.
 
 ```
 src/
-  lib.rs            crate root, invariants, public API
-  chain.rs          tamper-evident event chain (no_std available)
-  main.rs           demo binary (the only thing that prints)
-  pipeline.rs       stateless L1->L7 orchestration + generic relation pipeline
-  interface.rs      std-gated one-call facade (attest_bytes/text/file/chain)
-  entropy_sources.rs multi-method entropy harvest (per-method untraceability)
-  common/           domain tags, error type, Fiat-Shamir transcript
-  layers/           L0..L7
-  relations/        Relation trait + hash_preimage, merkle, ml_dsa
-  pq_backends/      SLH-DSA backend + FALCON scaffold
-  storage/          ObliviousRAM
-  execution/        MicroVM
+  lib.rs              crate root, invariants, public API
+  chain.rs            tamper-evident event chain (no_std available)
+  main.rs             demo binary (the only thing that prints)
+  pipeline.rs         stateless L1→L7 orchestration + batch verification
+  interface.rs        std-gated one-call facade (18 functions)
+  entropy_sources.rs  multi-method entropy harvest (6 independent sources)
+  common/             domain tags, error type, Fiat-Shamir transcript
+  layers/             L0..L7
+  relations/          Relation trait + hash_preimage, merkle, ml_dsa, pedersen
+  pq_backends/        SLH-DSA backend + FALCON scaffold
+  storage/            ObliviousRAM + read_modify_write + swap
+  execution/          MicroVM (17 opcodes + BytecodeBuilder)
 tests/
-  hardening.rs      source-level invariant guards
-  bench.rs          lightweight performance baselines
-  fuzz_manual.rs    random-input stress tests (no cargo-fuzz)
-  adversarial.rs    forged-proof negative tests
-  real_data.rs      real .txt file + demo MathSum relation
+  hardening.rs        source-level invariant guards
+  bench.rs            lightweight performance baselines
+  fuzz_manual.rs      random-input stress tests (no cargo-fuzz)
+  adversarial.rs      forged-proof negative tests
+  real_data.rs        real .txt file + demo MathSum relation
 scripts/
   check-hardening.sh
   scan-secret-div.py
-math_claims.txt    sample data for real_data test
+math_claims.txt       sample data for real_data test
 ```
