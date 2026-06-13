@@ -20,6 +20,12 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    # Ignore breaking major versions that conflict with libcrux dependencies
+    ignore:
+      - dependency-name: "sha3"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "getrandom"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
