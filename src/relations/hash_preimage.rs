@@ -36,12 +36,12 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 use crate::common::{domain, Transcript, VeilError};
+use crate::l0_memlock::zeroize_bytes;
 use crate::relations::Relation;
 
 use sha3::digest::{ExtendableOutput, Update, XofReader};
 use sha3::Shake256;
 use subtle::{Choice, ConstantTimeEq};
-use zeroize::Zeroize;
 
 /// Number of challenge bits = number of Lamport positions.
 const SECURITY_BITS: usize = 256;
@@ -63,14 +63,24 @@ pub struct Witness {
 }
 
 impl Drop for Witness {
+    #[inline(never)]
     fn drop(&mut self) {
-        self.seed.zeroize();
+        zeroize_bytes(&mut self.seed);
     }
 }
 
 /// One revealed leaf per position, selected by the challenge bit.
 pub struct Proof {
     pub openings: Vec<[u8; LEAF]>, // len == SECURITY_BITS
+}
+
+impl Drop for Proof {
+    #[inline(never)]
+    fn drop(&mut self) {
+        for opening in self.openings.iter_mut() {
+            zeroize_bytes(opening);
+        }
+    }
 }
 
 /// SHAKE256 → 32 bytes, over a sequence of tagged chunks.
@@ -142,8 +152,8 @@ impl Relation for HashPreimage {
             let mut sk1 = derive_sk(&witness.seed, i, 1);
             let p0 = pubnode(&sk0);
             let p1 = pubnode(&sk1);
-            sk0.zeroize();
-            sk1.zeroize();
+            zeroize_bytes(&mut sk0);
+            zeroize_bytes(&mut sk1);
             pk.push([p0, p1]);
         }
         Statement { pk }

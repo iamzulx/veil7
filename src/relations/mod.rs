@@ -16,6 +16,18 @@
 //! Soundness of every relation here holds in the Random Oracle Model (SHAKE256
 //! modelled as a random oracle). These are research/educational constructions —
 //! correct and tested, but unaudited. Do not use for production secrets.
+//!
+//! ## Determinism of the built-in relations
+//! `hash_preimage`, `merkle`, and `ml_dsa` are pure-deterministic: their
+//! `prove` implementations do not use the `entropy` parameter. Two calls
+//! with the same witness produce byte-identical `(Statement, Proof)`
+//! pairs and therefore byte-identical verdict transcripts. This is a
+//! feature — it lets auditors re-derive proofs offline without re-running
+//! the engine — but it means the engine's 12-round entropy mix
+//! (`harvest()`) in `prove_and_verify` is wasted for these relations. The
+//! `entropy` parameter is kept in the trait signature for forward
+//! compatibility with future probabilistic relations (e.g. discrete-log
+//! knowledge proofs with honest-verifier ZK simulation).
 
 use crate::common::{Transcript, VeilError};
 
@@ -43,6 +55,15 @@ pub trait Relation {
 
     /// Prove knowledge of `witness` for the derived statement.
     /// `entropy` supplies the prover's commitment randomness (from L1).
+    ///
+    /// Note for relation implementors: the current built-in relations
+    /// (`hash_preimage`, `merkle`, `ml_dsa`) are pure-deterministic —
+    /// their `prove` function ignores `entropy` and produces the same
+    /// `(Statement, Proof)` for the same witness every time. The
+    /// parameter is part of the trait signature so future relations
+    /// (e.g. probabilistic zero-knowledge schemes) can opt into the
+    /// entropy stream without a trait break. Documented in
+    /// `relations/mod.rs` honesty section.
     fn prove(
         witness: &Self::Witness,
         entropy: &[u8],

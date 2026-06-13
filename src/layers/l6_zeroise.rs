@@ -13,16 +13,17 @@
 //! Statelessness guarantee: after `scrub()` consumes the keys, there is no path
 //! by which key material can outlive the iteration.
 
+use crate::l0_memlock::zeroize_bytes;
 use crate::l2_keygen::EphemeralKeys;
-use zeroize::Zeroize;
 
 /// A scope guard that zeroises its contents when dropped. Use for transient
 /// secret-adjacent byte buffers that aren't already `ZeroizeOnDrop`.
 pub struct Zeroizing<const N: usize>(pub [u8; N]);
 
 impl<const N: usize> Drop for Zeroizing<N> {
+    #[inline(never)]
     fn drop(&mut self) {
-        self.0.zeroize();
+        zeroize_bytes(&mut self.0);
     }
 }
 

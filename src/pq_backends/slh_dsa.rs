@@ -7,11 +7,13 @@
 //!
 //! All secret key material is wrapped in `Zeroize` and wiped on drop.
 
+use crate::l0_memlock::zeroize_bytes;
 use core::convert::TryFrom;
 use slh_dsa::{
     signature::{Keypair, Signer, Verifier},
     Shake128f, Signature, SigningKey, VerifyingKey,
 };
+use subtle::Choice;
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -75,10 +77,15 @@ impl SlhDsaSigner {
 
     /// Deterministically sign `message`, then zeroize the secret key.
     pub fn sign(message: &[u8], secret: &mut SecretKey) -> Option<SignatureBytes> {
-        let sk = SigningKey::<Shake128f>::try_from(secret.as_slice()).ok()?;
+        let sk = match SigningKey::<Shake128f>::try_from(secret.as_slice()) {
+            Ok(sk) => sk,
+            Err(_) => {
+                zeroize_bytes(secret);
+                return None;
+            }
+        };
         let sig: Signature<Shake128f> = sk.sign(message);
-        use zeroize::Zeroize;
-        secret.zeroize();
+        zeroize_bytes(secret);
 
         let raw = sig.to_bytes();
         let mut out = [0u8; SIGNATURE_LEN];
@@ -87,17 +94,17 @@ impl SlhDsaSigner {
     }
 
     /// Verify `signature` against `message` using `public`.
-    /// Returns `true` iff valid. Malformed inputs → `false` (fail-closed).
-    pub fn verify(message: &[u8], signature: &SignatureBytes, public: &PublicKey) -> bool {
+    /// Returns `Choice(1)` iff valid. Malformed inputs → `Choice(0)`.
+    pub fn verify(message: &[u8], signature: &SignatureBytes, public: &PublicKey) -> Choice {
         let vk = match VerifyingKey::<Shake128f>::try_from(public.as_slice()) {
             Ok(v) => v,
-            Err(_) => return false,
+            Err(_) => return Choice::from(0u8),
         };
         let sig = match Signature::<Shake128f>::try_from(signature.as_slice()) {
             Ok(s) => s,
-            Err(_) => return false,
+            Err(_) => return Choice::from(0u8),
         };
-        vk.verify(message, &sig).is_ok()
+        Choice::from(vk.verify(message, &sig).is_ok() as u8)
     }
 }
 
@@ -114,7 +121,10 @@ mod tests {
         let pk = SlhDsaSigner::public_key(&sk).expect("valid secret key");
         let sig =
             SlhDsaSigner::sign(b"hello post-quantum world", &mut sk).expect("sign must succeed");
-        assert!(SlhDsaSigner::verify(b"hello post-quantum world", &sig, &pk));
+        assert_eq!(
+            SlhDsaSigner::verify(b"hello post-quantum world", &sig, &pk).unwrap_u8(),
+            1
+        );
     }
 
     #[test]
@@ -123,7 +133,7 @@ mod tests {
         let mut sk = SlhDsaSigner::derive_secret_key(&seed);
         let pk = SlhDsaSigner::public_key(&sk).expect("pk ok");
         let sig = SlhDsaSigner::sign(b"original", &mut sk).expect("sign ok");
-        assert!(!SlhDsaSigner::verify(b"tampered", &sig, &pk));
+        assert_eq!(SlhDsaSigner::verify(b"tampered", &sig, &pk).unwrap_u8(), 0);
     }
 
     #[test]
@@ -134,7 +144,7 @@ mod tests {
         let pk_b =
             SlhDsaSigner::public_key(&SlhDsaSigner::derive_secret_key(&seed_b)).expect("pk_b ok");
         let sig = SlhDsaSigner::sign(b"msg", &mut sk_a).expect("sign ok");
-        assert!(!SlhDsaSigner::verify(b"msg", &sig, &pk_b));
+        assert_eq!(SlhDsaSigner::verify(b"msg", &sig, &pk_b).unwrap_u8(), 0);
     }
 
     #[test]
@@ -143,7 +153,7 @@ mod tests {
         let sk = SlhDsaSigner::derive_secret_key(&seed);
         let pk = SlhDsaSigner::public_key(&sk).expect("pk ok");
         let garbage = [0u8; SIGNATURE_LEN];
-        assert!(!SlhDsaSigner::verify(b"msg", &garbage, &pk));
+        assert_eq!(SlhDsaSigner::verify(b"msg", &garbage, &pk).unwrap_u8(), 0);
     }
 
     #[test]

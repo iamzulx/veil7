@@ -12,10 +12,15 @@ path = "src/lib.rs"
 [[bin]]
 name = "veil7"
 path = "src/main.rs"
+required-features = ["std"]
+
+[features]
+default = ["std"]
+std = ["dep:getrandom"]
 
 [dependencies]
-# --- Entropy: OS CSPRNG (pure syscall on Android, no C deps) ---
-getrandom = "0.2"
+# --- Entropy: OS CSPRNG (pure syscall on Android, no C deps); optional for no_std ---
+getrandom = { version = "0.2", optional = true }
 
 # --- Memory locking: mlock/munlock syscalls (already in tree via getrandom) ---
 libc = "0.2"
@@ -41,6 +46,11 @@ strip = true        # strip symbols -> no metadata in binary
 overflow-checks = true
 debug = false
 debug-assertions = false
+
+[profile.hardening]
+inherits = "release"
+strip = false       # keep symbols for CI objdump hardening scans
+debug = "line-tables-only"
 
 [profile.dev]
 debug = false       # no debuginfo trace even in dev

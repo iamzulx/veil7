@@ -9,6 +9,7 @@
 //! Both PQ key types are `ZeroizeOnDrop` upstream (RustCrypto), so secret key
 //! material self-wipes. The derived sub-seeds are wiped here before returning.
 
+use crate::l0_memlock::zeroize_bytes;
 use crate::l1_entropy::Seed;
 use crate::{domain, VeilError};
 
@@ -19,7 +20,6 @@ use ml_kem::{DecapsulationKey, EncapsulationKey};
 
 use sha3::digest::{ExtendableOutput, Update, XofReader};
 use sha3::Shake256;
-use zeroize::Zeroize;
 
 /// Ephemeral post-quantum key material for a single verification iteration.
 ///
@@ -53,14 +53,14 @@ pub fn derive_keys(seed: &Seed) -> Result<EphemeralKeys, VeilError> {
         Array::try_from(&kem_seed_bytes[..]).map_err(|_| VeilError::Crypto)?;
     let kem_dk = DecapsulationKey::<MlKem768>::from_seed(kem_seed);
     let kem_ek = kem_dk.encapsulation_key().clone();
-    kem_seed_bytes.zeroize();
+    zeroize_bytes(&mut kem_seed_bytes);
 
     // --- ML-DSA-65: needs a 32-byte seed ---
     let mut sig_seed_bytes = derive::<32>(seed, domain::SIG_SEED);
     let sig_seed: ml_dsa::B32 =
         Array::try_from(&sig_seed_bytes[..]).map_err(|_| VeilError::Crypto)?;
     let sig_sk = SigningKey::<MlDsa65>::new(&sig_seed);
-    sig_seed_bytes.zeroize();
+    zeroize_bytes(&mut sig_seed_bytes);
 
     Ok(EphemeralKeys {
         kem_dk,

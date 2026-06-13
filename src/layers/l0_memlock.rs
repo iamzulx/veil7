@@ -26,7 +26,33 @@
 
 #![allow(unsafe_code)]
 
-use zeroize::Zeroize;
+use alloc::boxed::Box;
+use core::sync::atomic::{compiler_fence, Ordering};
+
+/// Wipe bytes with volatile stores plus a compiler fence, so the scrub cannot be
+/// elided as a dead store or reordered past a security boundary.
+#[inline(never)]
+pub(crate) fn zeroize_bytes(bytes: &mut [u8]) {
+    for b in bytes.iter_mut() {
+        // SAFETY: `b` is a valid, uniquely borrowed byte. Volatile write is used
+        // only to force the store to happen; it does not create aliasing.
+        unsafe {
+            core::ptr::write_volatile(b as *mut u8, 0);
+        }
+    }
+    compiler_fence(Ordering::SeqCst);
+}
+
+/// Wipe a `u64` scalar with a volatile store plus compiler fence.
+#[inline(never)]
+pub(crate) fn zeroize_u64(word: &mut u64) {
+    // SAFETY: `word` is a valid, uniquely borrowed scalar. Volatile write is
+    // used only to force the store to happen; it does not create aliasing.
+    unsafe {
+        core::ptr::write_volatile(word as *mut u64, 0);
+    }
+    compiler_fence(Ordering::SeqCst);
+}
 
 /// A heap-pinned, self-zeroising byte buffer.
 ///
@@ -93,9 +119,10 @@ impl<const N: usize> Default for Locked<N> {
 }
 
 impl<const N: usize> Drop for Locked<N> {
+    #[inline(never)]
     fn drop(&mut self) {
         // 1. Wipe the secret while pages are still resident and locked.
-        self.buf.zeroize();
+        zeroize_bytes(&mut self.buf[..]);
         // 2. Unlock the pages (only if we successfully locked them).
         if self.locked {
             // SAFETY: same valid [ptr, ptr+N) range that was passed to mlock;

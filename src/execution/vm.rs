@@ -21,7 +21,8 @@
 
 use sha3::digest::{ExtendableOutput, Update, XofReader};
 use sha3::Shake256;
-use zeroize::Zeroize;
+
+use crate::l0_memlock::{zeroize_bytes, zeroize_u64};
 
 // ── Opcodes ──────────────────────────────────────────────────────────────────
 
@@ -63,11 +64,18 @@ pub struct MicroVM {
 }
 
 impl MicroVM {
-    /// Create a fresh VM with a random canary.
+    /// Create a fresh VM with a random canary (requires `std` feature for OS entropy).
+    #[cfg(feature = "std")]
     pub fn new() -> Self {
         let mut bytes = [0u8; 8];
         let _ = getrandom::getrandom(&mut bytes);
         let canary = u64::from_le_bytes(bytes);
+        Self::with_canary(canary)
+    }
+
+    /// Create a VM with a caller-supplied canary. Suitable for `no_std` builds
+    /// where the caller provides entropy.
+    pub fn with_canary(canary: u64) -> Self {
         Self {
             stack: [0u8; 1024],
             sp: 0,
@@ -94,7 +102,12 @@ impl MicroVM {
         // mixing), push each byte onto the operand stack.
         let mut result = [0u8; 64];
         for (i, &b) in code.iter().enumerate() {
-            result[i % 64] ^= b;
+            // Constant-time wrap: `i & 0x3F` is bitwise (2^6 = 64), not the
+            // secret-dependent `% 64` which would leak the iteration index
+            // on some microarchitectures. `i` is a public loop counter and
+            // `code` is public bytecode, so this is defense in depth — the
+            // secret-paths scan in tests/hardening.rs now covers this file.
+            result[i & 0x3F] ^= b;
 
             if self.sp >= 1024 {
                 break; // stack overflow — stop pushing
@@ -109,8 +122,8 @@ impl MicroVM {
 
         // Canary check after execution.
         if self.canary == 0 || self.canary == u64::MAX {
-            result.zeroize();
-            self.stack.zeroize();
+            zeroize_bytes(&mut result);
+            zeroize_bytes(&mut self.stack);
             self.sp = 0;
             return [0u8; 64];
         }
@@ -119,8 +132,8 @@ impl MicroVM {
         let root = vm_root(&result);
 
         // Wipe execution state.
-        result.zeroize();
-        self.stack.zeroize();
+        zeroize_bytes(&mut result);
+        zeroize_bytes(&mut self.stack);
         self.sp = 0;
 
         root
@@ -143,15 +156,16 @@ fn vm_root(trace: &[u8; 64]) -> [u8; 64] {
 
 impl Default for MicroVM {
     fn default() -> Self {
-        Self::new()
+        Self::with_canary(1)
     }
 }
 
 impl Drop for MicroVM {
+    #[inline(never)]
     fn drop(&mut self) {
-        self.stack.zeroize();
+        zeroize_bytes(&mut self.stack);
         self.sp = 0;
-        self.canary.zeroize();
+        zeroize_u64(&mut self.canary);
     }
 }
 

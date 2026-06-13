@@ -210,6 +210,75 @@ impl Relation for MerkleInclusion {
     }
 }
 
+/// Pure-math Merkle root of a leaf slice. Empty input is rejected
+/// (there is no tree to compute a root for).
+///
+/// No PQ, no entropy, no ephemeral identity — anyone with the same
+/// leaves and the documented framing reproduces the same root. This is
+/// the prover side of the Merkle inclusion relation, exposed as a
+/// standalone helper so callers (e.g. `interface::attest_file_streaming`)
+/// can compute a tree root without going through the full relation
+/// pipeline.
+pub fn merkle_root(leaves: &[&[u8]]) -> Result<[u8; 32], VeilError> {
+    if leaves.is_empty() {
+        return Err(VeilError::Crypto);
+    }
+    let base: Vec<[u8; HASH]> = leaves.iter().map(|d| leaf_hash(d)).collect();
+    let (root, _path) = root_and_path(base, 0);
+    Ok(root)
+}
+
+/// Pure-math Merkle inclusion-path verification. Returns `Choice::from(1)`
+/// if `leaf` authenticates against `root` at position `index` under the
+/// sibling path, `Choice::from(0)` otherwise.
+///
+/// This is the verifier side of the Merkle inclusion relation, exposed
+/// standalone so auditors can check certificate-transparency / log
+/// inclusion proofs without the engine, without keys, without side
+/// effects. Same `Choice` contract as [`crate::chain::chain_verify`].
+pub fn merkle_verify_path(
+    leaf: &[u8; HASH],
+    root: &[u8; HASH],
+    index: usize,
+    siblings: &[[u8; HASH]],
+    leaf_count: usize,
+) -> Choice {
+    if leaf_count == 0 || index >= leaf_count {
+        return Choice::from(0u8);
+    }
+    let mut hash = *leaf;
+    let mut idx = index;
+    let mut n = leaf_count;
+    let mut used = 0usize;
+    let mut ok = Choice::from(1u8);
+    while n > 1 {
+        if idx == n - 1 && n % 2 == 1 {
+            // promoted node: hash carries up unchanged
+        } else {
+            match siblings.get(used) {
+                Some(sib) => {
+                    used += 1;
+                    hash = if idx.is_multiple_of(2) {
+                        node_hash(&hash, sib)
+                    } else {
+                        node_hash(sib, &hash)
+                    };
+                }
+                None => {
+                    ok = Choice::from(0u8);
+                    break;
+                }
+            }
+        }
+        idx /= 2;
+        n = n.div_ceil(2);
+    }
+    if used != siblings.len() {
+        ok = Choice::from(0u8);
+    }
+    ok & hash.ct_eq(root)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -325,5 +394,72 @@ mod tests {
             MerkleInclusion::verify(&stmt, &proof).unwrap().unwrap_u8(),
             0
         );
+    }
+
+    // ── merkle_root / merkle_verify_path (pure-math helpers) ────────────────
+    // The standalone helpers must agree with the relation's prover and
+    // verifier. This is the contract that lets the streaming file attest
+    // build a root and the audit side verify a path without going through
+    // the full relation pipeline.
+
+    #[test]
+    fn merkle_root_helper_matches_relation_statement() {
+        let ls: Vec<Vec<u8>> = (0..8u8).map(|i| alloc::vec![i; 4]).collect();
+        let leaf_refs: Vec<&[u8]> = ls.iter().map(|l| l.as_slice()).collect();
+        let helper_root = super::merkle_root(&leaf_refs).expect("non-empty");
+        let w = Witness {
+            leaves: ls.clone(),
+            index: 0,
+        };
+        let (stmt, _proof) = MerkleInclusion::prove(&w, &[]).unwrap();
+        assert_eq!(
+            helper_root, stmt.root,
+            "merkle_root helper must equal relation's statement.root"
+        );
+    }
+
+    #[test]
+    fn merkle_verify_path_helper_matches_relation_verifier() {
+        let ls: Vec<Vec<u8>> = (0..16u8).map(|i| alloc::vec![i; 4]).collect();
+        for idx in 0..16 {
+            let w = Witness {
+                leaves: ls.clone(),
+                index: idx,
+            };
+            let (stmt, proof) = MerkleInclusion::prove(&w, &[]).unwrap();
+            let ok = super::merkle_verify_path(
+                &stmt.leaf,
+                &stmt.root,
+                proof.index,
+                &proof.siblings,
+                proof.leaf_count,
+            );
+            assert_eq!(ok.unwrap_u8(), 1, "index {idx} must verify");
+        }
+    }
+
+    #[test]
+    fn merkle_verify_path_rejects_tampered_sibling() {
+        let ls: Vec<Vec<u8>> = (0..4u8).map(|i| alloc::vec![i; 4]).collect();
+        let w = Witness {
+            leaves: ls,
+            index: 0,
+        };
+        let (stmt, mut proof) = MerkleInclusion::prove(&w, &[]).unwrap();
+        proof.siblings[0][0] ^= 0xFF;
+        let ok = super::merkle_verify_path(
+            &stmt.leaf,
+            &stmt.root,
+            proof.index,
+            &proof.siblings,
+            proof.leaf_count,
+        );
+        assert_eq!(ok.unwrap_u8(), 0, "tampered sibling must fail");
+    }
+
+    #[test]
+    fn merkle_root_rejects_empty() {
+        let empty: &[&[u8]] = &[];
+        assert!(matches!(super::merkle_root(empty), Err(VeilError::Crypto)));
     }
 }

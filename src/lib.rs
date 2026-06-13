@@ -14,6 +14,8 @@
 // module opts back in with a narrowly-scoped `#![allow(unsafe_code)]` and is the
 // only place `unsafe` may appear. Everywhere else, unsafe is a hard error.
 #![deny(unsafe_code)]
+#![cfg_attr(not(feature = "std"), no_std)]
+extern crate alloc;
 
 // ── Module groups ───────────────────────────────────────────────────────────
 //
@@ -23,13 +25,18 @@
 //   relations/  NP-relation trait + concrete relations (hash preimage, merkle, ML-DSA)
 //   pq_backends/  formal PQ signature backends (SLH-DSA, …)
 //
+pub mod chain;
 pub mod common;
+pub mod entropy_sources;
 pub mod execution;
 pub mod layers;
 pub mod pipeline;
 pub mod pq_backends;
 pub mod relations;
 pub mod storage;
+
+#[cfg(feature = "std")]
+pub mod interface;
 
 // ── Compatibility bridges ─────────────────────────────────────────────────────
 //
@@ -51,5 +58,21 @@ pub use layers::l6_zeroise;
 pub use layers::l7_emit;
 
 // ── Primary public API ────────────────────────────────────────────────────────
+pub use chain::ChainState;
+pub use chain::{chain_root, chain_verify};
+pub use entropy_sources::{
+    hw_counter, os_csprng_primary, os_csprng_secondary, stack_addr, thread_id, wall_clock,
+    EntropySource,
+};
 pub use layers::l7_emit::Verdict;
-pub use pipeline::{verify_once, Claim};
+pub use pipeline::Claim;
+pub use relations::merkle::{merkle_root, merkle_verify_path};
+
+#[cfg(feature = "std")]
+pub use l1_entropy::Seed;
+
+#[cfg(feature = "std")]
+pub use pipeline::{
+    prove_and_verify, verify_once, verify_once_with, verify_once_with_oram, verify_once_with_vm,
+};
+pub use pipeline::{prove_and_verify_with_entropy, verify_once_with_seed};

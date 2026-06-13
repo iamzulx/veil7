@@ -15,7 +15,8 @@
 
 use sha3::digest::{ExtendableOutput, Update, XofReader};
 use sha3::Shake256;
-use zeroize::Zeroize;
+
+use crate::l0_memlock::zeroize_bytes;
 
 /// Genesis constant: the all-zero root.
 const GENESIS: [u8; 64] = [0u8; 64];
@@ -59,20 +60,25 @@ impl ObliviousRAM {
     /// The target slot's content is hashed (SHAKE256 → 64B) before return;
     /// this matches the write side's hashing and prevents distinguishing
     /// read from write at the bus level.
+    ///
+    /// The address is masked into 8 bits with a constant-time AND rather
+    /// than a secret-dependent `% 256` — modulo timing depends on the
+    /// dividend value, which would leak the ORAM access pattern. The
+    /// bitwise AND is semantically equivalent (256 = 2^8) but does not
+    /// expose the address on any modern microarchitecture.
     #[must_use = "read result must be used"]
     pub fn read(&self, addr: usize) -> [u8; 64] {
-        let index = addr % 256;
+        let index = addr & 0xFF;
         let mut result = GENESIS;
 
         for i in 0..256 {
-            // Touch all pad bytes — constant traffic on the memory bus.
-            for j in 0..64 {
-                let _ = self.data[i].pad[j];
-            }
-
-            // Only extract the target content (already hashed at write time).
-            if i == index {
-                result = self.data[i].content;
+            // Constant-time mask: 0xFF if target, 0x00 otherwise.
+            let mask = 0u8.wrapping_sub((i == index) as u8);
+            for (j, out) in result.iter_mut().enumerate() {
+                // Touch content and padding for every slot — uniform traffic.
+                core::hint::black_box(self.data[i].pad[j]);
+                let byte = core::hint::black_box(self.data[i].content[j]);
+                *out = (*out & !mask) | (byte & mask);
             }
         }
 
@@ -85,8 +91,12 @@ impl ObliviousRAM {
     /// is derived from the address comparison (`0xFF` for target, `0x00` for
     /// others), and the update is `(old & !mask) | (hashed & mask)` — no
     /// branch, uniform traffic.
+    ///
+    /// The address is masked into 8 bits with a constant-time AND for the
+    /// same reason as [`Self::read`]: modulo timing would leak the ORAM
+    /// access pattern.
     pub fn write(&mut self, addr: usize, value: [u8; 64]) {
-        let index = addr % 256;
+        let index = addr & 0xFF;
         let mut hashed = oram_hash(&value);
 
         for i in 0..256 {
@@ -100,7 +110,7 @@ impl ObliviousRAM {
             }
         }
 
-        hashed.zeroize();
+        zeroize_bytes(&mut hashed);
     }
 }
 
@@ -111,10 +121,11 @@ impl Default for ObliviousRAM {
 }
 
 impl Drop for ObliviousRAM {
+    #[inline(never)]
     fn drop(&mut self) {
         for slot in self.data.iter_mut() {
-            slot.content.zeroize();
-            slot.pad.zeroize();
+            zeroize_bytes(&mut slot.content);
+            zeroize_bytes(&mut slot.pad);
         }
     }
 }
@@ -176,6 +187,26 @@ mod tests {
         let oram = ObliviousRAM::new();
         let got = oram.read(99);
         assert_eq!(got, GENESIS);
+    }
+
+    /// A new test proving the constant-time address path (bitwise AND)
+    /// is semantically equivalent to the prior `% 256` modulo for any
+    /// address in the natural 0..256 range, and wraps the same way for
+    /// larger addresses. Pure data-equality test, no timing claim made.
+    #[test]
+    fn address_wrap_bitmask_matches_modulo_semantics() {
+        let mut oram = ObliviousRAM::new();
+        let val: [u8; 64] = [0x55u8; 64];
+        // Write at addr=3, then read at addr=3 + 256*N — both should match.
+        oram.write(3, val);
+        let baseline = oram.read(3);
+        for n in 0..4u64 {
+            let alt = oram.read(3 + 256 * n as usize);
+            assert_eq!(
+                baseline, alt,
+                "addr+256*k must wrap the same as modulo for k={n}"
+            );
+        }
     }
 
     #[test]

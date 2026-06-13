@@ -26,13 +26,13 @@
 //! framing around it is unaudited.
 
 use crate::common::{Transcript, VeilError};
+use crate::l0_memlock::zeroize_bytes;
 use crate::relations::Relation;
 
 use ml_dsa::{KeyInit as _, Keypair as _, MlDsa65, Signature, SigningKey, VerifyingKey};
 use ml_kem::array::Array; // shared hybrid-array type used to build the 32-byte seed
 
 use subtle::Choice;
-use zeroize::Zeroize;
 
 /// Protocol label binding the transcript to this relation.
 const PROTO: &[u8] = b"veil7:relation:ml-dsa-65-knowledge:v1";
@@ -50,8 +50,9 @@ pub struct Witness {
 }
 
 impl Drop for Witness {
+    #[inline(never)]
     fn drop(&mut self) {
-        self.seed.zeroize();
+        zeroize_bytes(&mut self.seed);
     }
 }
 

@@ -1,0 +1,8 @@
+# Persamaan Matematika Ringan - Test Universal Verification veil7
+# Format per baris: a,b,s  (membuktikan bahwa a + b = s)
+
+7,8,15
+42,58,100
+123,456,579
+999,1,1000
+13,27,40

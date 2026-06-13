@@ -22,6 +22,8 @@ use sha3::digest::{ExtendableOutput, Update, XofReader};
 use sha3::Shake256;
 use subtle::Choice;
 
+use core::fmt::Write;
+
 /// The metadata-free result of one verification iteration.
 pub struct Verdict {
     /// Constant-time validity bit.
@@ -82,34 +84,32 @@ impl core::fmt::Debug for Verdict {
         // Only the bit and the hash. Nothing time-varying or identifying.
         write!(
             f,
-            "Verdict {{ valid: {}, transcript: {} }}",
-            self.valid.unwrap_u8(),
-            hex32(&self.transcript)
-        )
+            "Verdict {{ valid: {}, transcript: ",
+            self.valid.unwrap_u8()
+        )?;
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        for &byte in self.transcript.iter() {
+            f.write_char(HEX[(byte >> 4) as usize] as char)?;
+            f.write_char(HEX[(byte & 0x0f) as usize] as char)?;
+        }
+        write!(f, " }}")
     }
-}
-
-/// Lowercase hex of a 32-byte array, no allocation beyond the fixed buffer.
-fn hex32(b: &[u8; 32]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut s = String::with_capacity(64);
-    for &byte in b.iter() {
-        s.push(HEX[(byte >> 4) as usize] as char);
-        s.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    s
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::l1_entropy::harvest;
+    use crate::l1_entropy::Seed;
     use crate::l2_keygen::derive_keys;
     use crate::l3_commit::commit;
 
+    fn fake_seed() -> Seed {
+        Seed::from_bytes(&[0xA5u8; 64])
+    }
+
     #[test]
     fn verdict_carries_bit_and_hash() {
-        let seed = harvest(b"l7").unwrap();
+        let seed = fake_seed();
         let keys = derive_keys(&seed).unwrap();
         let c = commit(&keys, b"claim");
         let v = Verdict::new(Choice::from(1u8), &c);
@@ -119,11 +119,11 @@ mod tests {
 
     #[test]
     fn debug_is_metadata_free() {
-        let seed = harvest(b"l7d").unwrap();
+        let seed = fake_seed();
         let keys = derive_keys(&seed).unwrap();
         let c = commit(&keys, b"claim");
         let v = Verdict::new(Choice::from(0u8), &c);
-        let s = format!("{:?}", v);
+        let s = alloc::format!("{:?}", v);
         assert!(s.contains("valid: 0"));
         assert!(s.contains("transcript:"));
     }
