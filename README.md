@@ -11,7 +11,7 @@ metadata, no trace, no persisted state.
 Verified on aarch64-android (Termux), Rust 1.95.0:
 
 - `cargo build` / `cargo build --release` — clean
-- `cargo test` — 153 tests (106 unit + 47 integration), all passing
+- `cargo test` — 165 tests (118 unit + 47 integration), all passing
 - `cargo clippy --all-targets -- -D warnings` — clean (zero warnings)
 - `cargo fmt --check` — clean
 - `cargo check --no-default-features` — clean (`#![no_std]` + `alloc` compatible)
@@ -285,7 +285,7 @@ persists between calls).
 
 ```sh
 cargo run --release        # demo: runs all four pipelines, prints verdicts
-cargo test                 # full suite (153 tests)
+cargo test                 # full suite (165 tests)
 cargo test --test hardening # side-channel regression guards
 cargo test --test bench     # lightweight iteration benchmarks
 cargo test --test adversarial # forged-proof negative tests

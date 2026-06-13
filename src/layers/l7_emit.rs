@@ -23,6 +23,7 @@ use sha3::Shake256;
 use subtle::Choice;
 
 use core::fmt::Write;
+use core::sync::atomic::{compiler_fence, Ordering};
 
 /// The metadata-free result of one verification iteration.
 pub struct Verdict {
@@ -35,6 +36,19 @@ pub struct Verdict {
 impl Verdict {
     /// Construct a verdict from the validity choice and the commitment.
     pub(crate) fn new(valid: Choice, commitment: &Commitment) -> Self {
+        // Side-channel hardening: `Choice` is supposed to be CT but
+        // dalek-cryptography/subtle documents it as "best-effort"
+        // (CVE-2026-23519 showed LLVM may optimize cmov into bne
+        // on ARM Cortex-M0 — different arch than ours but the
+        // principle applies). We add a compiler fence before the
+        // constructor so the `Choice` is observable across the
+        // function boundary as the optimizer's barrier put it
+        // there, and not as some compiler-internal value that
+        // got folded.
+        compiler_fence(Ordering::SeqCst);
+        // SIDE-CHANNEL: T-table Keccak. Absorbs only public commitment bytes.
+        // See SPEC-HARDENING.md §"Cache timing and T-table side channels".
+        // Risk class: LOW (public input).
         let mut xof = Shake256::default();
         xof.update(domain::TRANSCRIPT);
         xof.update(commitment.as_bytes());
@@ -50,6 +64,13 @@ impl Verdict {
     /// to the statement (carries no secret), so the verdict can be correlated to
     /// the claim the caller holds without the engine emitting any metadata.
     pub(crate) fn from_statement_digest(valid: Choice, statement_digest: &[u8; 32]) -> Self {
+        // Same hardening as `new`: a fence before the Choice field is
+        // written into the struct, to keep `valid` observable across
+        // the constructor boundary.
+        compiler_fence(Ordering::SeqCst);
+        // SIDE-CHANNEL: T-table Keccak. Absorbs only public statement_digest
+        // bytes. See SPEC-HARDENING.md §"Cache timing and T-table side
+        // channels". Risk class: LOW (public input).
         let mut xof = Shake256::default();
         xof.update(domain::TRANSCRIPT);
         xof.update(statement_digest);

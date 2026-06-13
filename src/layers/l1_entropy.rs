@@ -140,6 +140,10 @@ fn mix_round(i: usize, personalization: &[u8], pool: &mut [u8; SEED_LEN]) -> Res
     let counter = (i as u64).to_le_bytes();
     let mut h1 = [0u8; SEED_LEN];
     {
+        // SIDE-CHANNEL: T-table Keccak absorbs raw OS entropy + counter. On
+        // shared-cache hardware an attacker can recover the per-iteration
+        // pool bytes. See SPEC-HARDENING.md §"Cache timing and T-table side
+        // channels". Risk class: HIGH (raw entropy input).
         let mut xof = Shake256::default();
         xof.update(domain::ENTROPY_MIX);
         xof.update(&counter);
@@ -155,6 +159,9 @@ fn mix_round(i: usize, personalization: &[u8], pool: &mut [u8; SEED_LEN]) -> Res
     // 4. Rehash the first half into a fresh sponge.
     let mut h2 = [0u8; HALF_LEN];
     {
+        // SIDE-CHANNEL: T-table Keccak absorbs the first half of the
+        // freshly-derived pool. See SPEC-HARDENING.md §"Cache timing and
+        // T-table side channels". Risk class: HIGH (entropy pool).
         let mut xof = Shake256::default();
         xof.update(domain::ENTROPY_FOLD);
         xof.update(&counter);
@@ -199,6 +206,9 @@ pub fn harvest(personalization: &[u8]) -> Result<Seed, VeilError> {
     // sits in an unlocked stack array.
     let mut locked = Locked::<SEED_LEN>::new();
     {
+        // SIDE-CHANNEL: T-table Keccak absorbs the final pool bytes (entropy
+        // sources path). See SPEC-HARDENING.md §"Cache timing and T-table
+        // side channels". Risk class: HIGH (raw entropy material flows in).
         let mut xof = Shake256::default();
         xof.update(domain::ENTROPY_FINALIZE);
         xof.update(personalization);
@@ -319,6 +329,9 @@ pub fn harvest_multi_source(personalization: &[u8]) -> Result<Seed, VeilError> {
     // sits in an unlocked stack array.
     let mut locked = Locked::<SEED_LEN>::new();
     {
+        // SIDE-CHANNEL: T-table Keccak absorbs the final pool bytes (L1
+        // entropy path). See SPEC-HARDENING.md §"Cache timing and T-table
+        // side channels". Risk class: HIGH (raw entropy material flows in).
         let mut xof = Shake256::default();
         xof.update(domain::ENTROPY_FINALIZE);
         xof.update(personalization);

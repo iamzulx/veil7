@@ -39,6 +39,7 @@ use crate::common::{domain, Transcript, VeilError};
 use crate::l0_memlock::zeroize_bytes;
 use crate::relations::Relation;
 
+use core::sync::atomic::{compiler_fence, Ordering};
 use sha3::digest::{ExtendableOutput, Update, XofReader};
 use sha3::Shake256;
 use subtle::{Choice, ConstantTimeEq};
@@ -84,6 +85,10 @@ impl Drop for Proof {
 }
 
 /// SHAKE256 → 32 bytes, over a sequence of tagged chunks.
+// SIDE-CHANNEL: T-table Keccak. Inputs here include the Lamport secret leaves
+// (`sk[i][b] = H(LAMPORT_SECRET ‖ w ‖ i ‖ b)`). On shared-cache hardware an
+// attacker can recover the per-leaf secret bytes. See SPEC-HARDENING.md
+// §"Cache timing and T-table side channels". Risk class: HIGH (private witness).
 fn h32(parts: &[&[u8]]) -> [u8; LEAF] {
     let mut xof = Shake256::default();
     for p in parts {
@@ -118,6 +123,10 @@ fn challenge_bit(c: &[u8; CHALLENGE_BYTES], i: usize) -> u8 {
 
 /// Compact binding commitment over the whole public key, absorbed into the
 /// transcript so the challenge depends on every pk byte.
+// SIDE-CHANNEL: T-table Keccak. Absorbs only **public** statement bytes (the
+// Lamport public key). The T-table access pattern leaks the pk, but pk is
+// public by definition. See SPEC-HARDENING.md §"Cache timing and T-table side
+// channels". Risk class: LOW (public input).
 fn pk_commitment(stmt: &Statement) -> [u8; LEAF] {
     let mut xof = Shake256::default();
     xof.update(domain::LAMPORT_PUBNODE);
@@ -186,7 +195,14 @@ impl Relation for HashPreimage {
     fn verify(stmt: &Statement, proof: &Proof) -> Result<Choice, VeilError> {
         // Malformed proof/statement -> reject (no panic, no oracle).
         if stmt.pk.len() != SECURITY_BITS || proof.openings.len() != SECURITY_BITS {
-            return Ok(Choice::from(0u8));
+            // Side-channel hardening: a fence around the malformed-input
+            // rejection so the early-return Choice is observable across
+            // the function boundary (CVE-2026-23519-style fragility in
+            // subtle's "best-effort" optimization barrier).
+            compiler_fence(Ordering::SeqCst);
+            let c = Choice::from(0u8);
+            compiler_fence(Ordering::SeqCst);
+            return Ok(c);
         }
 
         let mut t = Transcript::new(PROTO);
@@ -194,12 +210,20 @@ impl Relation for HashPreimage {
         let c: [u8; CHALLENGE_BYTES] = t.challenge_array(b"lamport:challenge");
 
         // Every position must check out; combine in constant time (no early exit).
+        //
+        // Side-channel hardening: compiler_fence(SeqCst) around the
+        // initial Choice::from(1) and the returned `ok` so the
+        // accumulator's final state is observable across the function
+        // boundary regardless of any future LLVM optimization that
+        // might try to fold the loop's AND-accumulator into a branch.
+        compiler_fence(Ordering::SeqCst);
         let mut ok = Choice::from(1u8);
         for i in 0..SECURITY_BITS {
             let b = challenge_bit(&c, i) as usize;
             let recomputed = pubnode(&proof.openings[i]);
             ok &= recomputed.ct_eq(&stmt.pk[i][b]);
         }
+        compiler_fence(Ordering::SeqCst);
         Ok(ok)
     }
 }

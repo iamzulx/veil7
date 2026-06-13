@@ -204,7 +204,7 @@ fn seed_based_tampered_claim_fails() {
     let claim = Claim::new(b"seed claim");
     let v1 =
         verify_once_with_seed::<veil7::l4_prove::MlDsaProver, veil7::l5_verify::MlDsaVerifier>(
-            &seed, &claim,
+            seed, &claim,
         )
         .unwrap();
     assert!(v1.is_valid_bool());
@@ -217,8 +217,8 @@ fn prove_and_verify_with_wrong_entropy_fails_deterministic() {
     let w = HashWitness { seed: [0xDDu8; 32] };
     let seed_a = Seed::from_bytes(&[0xAAu8; 64]);
     let seed_b = Seed::from_bytes(&[0xBBu8; 64]);
-    let v1 = prove_and_verify_with_entropy::<HashPreimage>(&w, &seed_a).unwrap();
-    let v2 = prove_and_verify_with_entropy::<HashPreimage>(&w, &seed_b).unwrap();
+    let v1 = prove_and_verify_with_entropy::<HashPreimage>(&w, seed_a).unwrap();
+    let v2 = prove_and_verify_with_entropy::<HashPreimage>(&w, seed_b).unwrap();
     assert!(v1.is_valid_bool());
     assert!(v2.is_valid_bool());
     assert_eq!(

@@ -47,6 +47,9 @@ pub fn chain_root(events: &[&[u8]]) -> Result<[u8; 32], VeilError> {
         return Err(VeilError::Crypto);
     }
 
+    // SIDE-CHANNEL: T-table Keccak. Absorbed material is the chain events
+    // (public by definition). See SPEC-HARDENING.md §"Cache timing and
+    // T-table side channels". Risk class: LOW (public events).
     let mut xof = Shake256::default();
     xof.update(domain::CHAIN_HEAD);
     for ev in events {
@@ -110,6 +113,9 @@ impl ChainState {
     /// the same domain-tagged framing as every subsequent one; no
     /// events have been absorbed yet.
     pub fn new() -> Self {
+        // SIDE-CHANNEL: T-table Keccak; only public event bytes will be
+        // absorbed. See SPEC-HARDENING.md §"Cache timing and T-table side
+        // channels". Risk class: LOW.
         let mut xof = Shake256::default();
         xof.update(domain::CHAIN_HEAD);
         ChainState { xof, count: 0 }

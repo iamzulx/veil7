@@ -37,6 +37,9 @@ impl Transcript {
     /// Start a transcript bound to a protocol label. Two protocols with
     /// different labels can never produce the same challenge stream.
     pub fn new(protocol_label: &[u8]) -> Self {
+        // SIDE-CHANNEL: T-table Keccak. All `Transcript` absorbs are public.
+        // See SPEC-HARDENING.md §"Cache timing and T-table side channels".
+        // Risk class: LOW (public Fiat-Shamir).
         let mut xof = Shake256::default();
         xof.update(domain::FS_PROTOCOL);
         framed(&mut xof, protocol_label);
@@ -51,6 +54,9 @@ impl Transcript {
     /// Both `label` and `data` are length-framed, so the mapping from
     /// (label, data) to internal state is injective — no concatenation ambiguity.
     pub fn absorb(&mut self, label: &[u8], data: &[u8]) {
+        // SIDE-CHANNEL: T-table Keccak; `data` here is the public value the
+        // caller labelled. See SPEC-HARDENING.md §"Cache timing and T-table
+        // side channels". Risk class: LOW (public transcript input).
         let mut xof = Shake256::default();
         xof.update(domain::FS_ABSORB);
         xof.update(&self.state);
@@ -67,6 +73,9 @@ impl Transcript {
     /// distinct from this one.
     pub fn challenge(&mut self, label: &[u8], out: &mut [u8]) {
         // 1. Squeeze challenge bytes from the current chained state.
+        // SIDE-CHANNEL: T-table Keccak; challenge is public. See
+        // SPEC-HARDENING.md §"Cache timing and T-table side channels".
+        // Risk class: LOW (public Fiat-Shamir output).
         let mut xof = Shake256::default();
         xof.update(domain::FS_SQUEEZE);
         xof.update(&self.state);

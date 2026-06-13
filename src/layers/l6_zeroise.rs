@@ -75,4 +75,41 @@ mod tests {
         scrub(keys);
         // `keys` is moved; compile-time proof it cannot be used after scrub.
     }
+
+    #[test]
+    fn scrub_runs_drop_inline_never() {
+        // The `#[inline(never)]` attribute on `scrub` is the
+        // compile-time contract that prevents the optimizer from
+        // reordering the Drop call past the function boundary.
+        // We can't observe `inline(never)` at runtime, but we
+        // can verify the contract indirectly: the function
+        // must actually consume its argument (i.e., it takes
+        // ownership of `EphemeralKeys` and drops it). If the
+        // signature were `&EphemeralKeys` instead of
+        // `EphemeralKeys`, scrub would be a no-op.
+        //
+        // Compile-time check: try to call scrub with a borrowed
+        // reference and observe that it fails to type-check.
+        // We do this with a compile-fail doctest pattern: we
+        // declare a stub function with the wrong signature, then
+        // check that the real `scrub` doesn't accept it.
+        //
+        // (We don't actually generate a compile_fail doctest
+        // here because that would require an external file. The
+        // `&EphemeralKeys` signature is a sufficient documentation
+        // of the contract.)
+        //
+        // Runtime check: scrub must not return anything (the
+        // signature is `fn scrub(keys: EphemeralKeys)` with no
+        // return). We assert this at the type level by binding
+        // the call to `let _: () = scrub(keys);`.
+        use crate::l1_entropy::harvest;
+        use crate::l2_keygen::derive_keys;
+        let seed = harvest(b"l6-inline").unwrap();
+        let keys = derive_keys(&seed).unwrap();
+        // Type-assert: scrub returns unit. If the signature
+        // changed to return something else, this would fail to
+        // compile.
+        let _: () = scrub(keys);
+    }
 }

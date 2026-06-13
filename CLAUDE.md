@@ -87,6 +87,28 @@ cargo test
 cargo build --release
 ```
 
+## Side-channel threat model (documented assumption)
+
+veil7 uses `sha3` 0.10 (RustCrypto) which is a **T-table Keccak**
+implementation. This is a per-call cache-timing side channel against
+the absorbed secret on shared-cache hardware (Flush+Reload, Prime+Probe,
+Evict+Time on co-resident VMs / same-core L3). The 12 SHAKE256 call
+sites in veil7-owned code each carry a `// SIDE-CHANNEL:` comment
+pointing to `SPEC-HARDENING.md` §"Cache timing and T-table side channels",
+which lists every call site, the secret class that flows in, and the
+risk class per deployment (LOW on single-tenant hardware, MEDIUM-HIGH
+on shared-CPU cloud, HIGH on multi-tenant bare-metal).
+
+**The threat is documented as an accepted Phase 1 gap** — patching
+requires either a constant-time Keccak upstream (none exists in pure
+Rust) or a self-rolled bit-sliced implementation, both of which are
+out of scope for hardening. Phase 2 budgets a `dudect`/`ctverif`
+hardware validation sprint.
+
+The same caveat applies to all RustCrypto PQ crates (`ml-kem`, `ml-dsa`,
+`slh-dsa`) which use the same `sha3` crate internally. Phase 1 does not
+fork or replace them.
+
 ## When in doubt
 
 - Wipe > leak

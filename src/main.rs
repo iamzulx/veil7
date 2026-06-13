@@ -1,22 +1,8 @@
-//! veil7 CLI — demo attestation interface.
+//! veil7 CLI — the only file that may print.
 //!
-//! This is the only file in the crate that may print to stdout.
-//! The engine library (all of `src/`) writes nothing; all output comes
-//! from here — consistent with the `NO LOG` philosophy.
+//! All library code is silent; output comes only from here.
 //!
-//! Commands:
-//!   sign <text>                Attest a string.
-//!   sign-file <path>           Attest contents of a file (loads fully).
-//!   sign-stream <path>         Attest contents of a file (chunked, no full load).
-//!   chain <ev>...              Attest events as a tamper-evident chain.
-//!   chain-root <ev>...         Compute the chain root only (no PQ, pure math).
-//!   verify <hex> <ev>..        Verify events fold to a given root (no PQ).
-//!   prove hash-preimage <hex>  Run the Lamport hash-preimage relation.
-//!   prove merkle-root <hex>..  Compute Merkle root of a leaf set.
-//!   prove merkle-include <hex_leaf> <hex_root> <index> <hex_sib>..
-//!                             Verify a Merkle inclusion proof.
-//!   prove ml-dsa <hex>         Run the ML-DSA-65 key-knowledge relation.
-//!   help                       Show usage.
+//! Subcommands: sign | sign-file | sign-stream | chain | chain-root | verify | prove | help
 
 use std::env;
 
@@ -294,18 +280,6 @@ fn hex_nibble(b: u8) -> Option<u8> {
 }
 
 fn print_help() {
-    eprintln!("veil7 — stateless post-quantum attestation");
-    eprintln!("Usage:");
-    eprintln!("  sign <text>                       Attest a string");
-    eprintln!("  sign-file <path>                  Attest a file (loads fully)");
-    eprintln!("  sign-stream <path>                Attest a file (chunked, no full load)");
-    eprintln!("  chain <ev> [<ev>..]               Attest events as a tamper-evident chain");
-    eprintln!("  chain-root <ev> [<ev>..]          Compute chain root only (pure math)");
-    eprintln!("  verify <hex> <ev>..               Verify events fold to a 32-byte hex root");
-    eprintln!("  prove hash-preimage <hex>         Run Lamport hash-preimage relation");
-    eprintln!("  prove merkle-root <hex>..         Compute Merkle root of a leaf set");
-    eprintln!("  prove merkle-include <leaf> <root> <index> <sib>..");
-    eprintln!("                                    Verify a Merkle inclusion proof");
-    eprintln!("  prove ml-dsa <hex>                Run ML-DSA-65 key-knowledge relation");
-    eprintln!("  help                              Show this help");
+    eprintln!("veil7");
+    eprintln!("sign <text> | sign-file <path> | sign-stream <path> | chain <ev>.. | chain-root <ev>.. | verify <hex> <ev>.. | prove <rel> <args>.. | help");
 }

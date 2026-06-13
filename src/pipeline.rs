@@ -53,13 +53,31 @@ impl<'a> Claim<'a> {
 /// Run one full stateless verification iteration with a caller-supplied [`Seed`].
 /// This is the `no_std` entry point: the caller harvests entropy externally,
 /// then passes it here. No OS CSPRNG is invoked.
-pub fn verify_once_with_seed<P, V>(seed: &Seed, claim: &Claim<'_>) -> Result<Verdict, VeilError>
+///
+/// The seed is **consumed by value** (not borrowed) so the pipeline can
+/// explicitly drop it as soon as L2 finishes. After L2 the seed is no
+/// longer needed: the ephemeral PQ keypair is the only secret that flows
+/// through L3..L7, and the seed is auto-wiped on `Drop`. The explicit
+/// `drop(seed)` after `derive_keys` is defence-in-depth against any
+/// future optimization pass that might extend the seed's live range
+/// past L2.
+pub fn verify_once_with_seed<P, V>(seed: Seed, claim: &Claim<'_>) -> Result<Verdict, VeilError>
 where
     P: Prover,
     V: Verifier,
 {
     // L2 — derive ephemeral PQ keypairs. Secret keys are ZeroizeOnDrop.
-    let keys = derive_keys(seed)?;
+    let keys = derive_keys(&seed)?;
+
+    // Side-channel hardening: the master seed is no longer needed
+    // after L2 (the ephemeral keypair is the only secret that flows
+    // through L3..L7). Drop it NOW to minimize its live range and
+    // give the wipe the earliest possible insertion point. The seed
+    // would auto-wipe on Drop at end of scope anyway, but
+    // explicit-drop here makes the intent visible to the optimizer
+    // and to human readers, and prevents a future code change from
+    // accidentally extending the seed's lifetime.
+    core::mem::drop(seed);
 
     // L3 — commit to the claim under the ephemeral identity.
     let commitment = commit(&keys, claim.bytes);
@@ -96,12 +114,22 @@ use crate::relations::Relation;
 ///
 /// `entropy` supplies the prover's commitment randomness. It must be freshly
 /// harvested and ideally memory-locked by the caller.
+///
+/// The seed is **consumed by value** (see `verify_once_with_seed` for the
+/// rationale) so the live range is explicit. After `R::prove` the seed
+/// is no longer needed: the relation's randomness is consumed and the
+/// statement + proof are public material.
 pub fn prove_and_verify_with_entropy<R: Relation>(
     witness: &R::Witness,
-    entropy: &Seed,
+    entropy: Seed,
 ) -> Result<Verdict, VeilError> {
     // Prove: witness + entropy -> (statement, proof) via Fiat-Shamir.
     let (stmt, proof) = R::prove(witness, entropy.as_bytes())?;
+
+    // Side-channel hardening: same explicit-drop pattern as
+    // `verify_once_with_seed`. The seed is no longer needed after
+    // `R::prove`; dropping it here minimizes its live range.
+    core::mem::drop(entropy);
 
     // Verify with the same relation (constant-time Choice).
     let valid = R::verify(&stmt, &proof)?;
@@ -132,7 +160,7 @@ use crate::l1_entropy::harvest;
 #[cfg(feature = "std")]
 pub fn verify_once(claim: &Claim<'_>) -> Result<Verdict, VeilError> {
     let seed = harvest(claim.personalization)?;
-    verify_once_with_seed::<MlDsaProver, MlDsaVerifier>(&seed, claim)
+    verify_once_with_seed::<MlDsaProver, MlDsaVerifier>(seed, claim)
 }
 
 /// Run one full stateless iteration with a caller-chosen `Prover`/`Verifier`
@@ -144,7 +172,7 @@ where
     V: Verifier,
 {
     let seed = harvest(claim.personalization)?;
-    verify_once_with_seed::<P, V>(&seed, claim)
+    verify_once_with_seed::<P, V>(seed, claim)
 }
 
 /// Run one stateless prove→verify iteration for an arbitrary [`Relation`].
@@ -155,7 +183,7 @@ pub fn prove_and_verify<R: Relation>(
     entropy_personalization: &[u8],
 ) -> Result<Verdict, VeilError> {
     let seed = harvest(entropy_personalization)?;
-    prove_and_verify_with_entropy::<R>(witness, &seed)
+    prove_and_verify_with_entropy::<R>(witness, seed)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -176,6 +204,10 @@ use crate::storage::oram::ObliviousRAM;
 /// patterns.
 #[cfg(feature = "std")]
 pub fn verify_once_with_oram(claim: &Claim<'_>) -> Result<Verdict, VeilError> {
+    // Harvest the seed (it is consumed by value below; we don't need to
+    // keep the harvest-time copy around once the ORAM has extracted
+    // its bytes). Wipe the raw buffer that came out of the ORAM as
+    // soon as we've reconstructed the seed.
     let seed = harvest(claim.personalization)?;
 
     // Store seed in ORAM (slot 0), read it back.
@@ -185,7 +217,13 @@ pub fn verify_once_with_oram(claim: &Claim<'_>) -> Result<Verdict, VeilError> {
     let seed_from_oram = Seed::from_bytes(&raw);
     zeroize_bytes(&mut raw);
 
-    verify_once_with_seed::<MlDsaProver, MlDsaVerifier>(&seed_from_oram, claim)
+    // Side-channel hardening: the harvest-time `seed` is no longer
+    // needed (the ORAM-stored copy is what we just extracted). Drop
+    // it NOW so its live range is bounded by the ORAM round-trip,
+    // not by the rest of the pipeline.
+    core::mem::drop(seed);
+
+    verify_once_with_seed::<MlDsaProver, MlDsaVerifier>(seed_from_oram, claim)
 }
 
 /// Run `verify_once` but first execute the claim bytes through the MicroVM,
@@ -207,7 +245,7 @@ pub fn verify_once_with_vm(claim: &Claim<'_>) -> Result<Verdict, VeilError> {
     let seed = Seed::from_bytes(&seed_bytes);
     zeroize_bytes(&mut seed_bytes);
 
-    verify_once_with_seed::<MlDsaProver, MlDsaVerifier>(&seed, claim)
+    verify_once_with_seed::<MlDsaProver, MlDsaVerifier>(seed, claim)
 }
 
 #[cfg(feature = "std")]
@@ -256,7 +294,7 @@ mod tests {
         let seed = Seed::from_bytes(&[0xA5u8; 64]);
         let claim = Claim::new(b"seed-based claim");
         let verdict =
-            verify_once_with_seed::<MlDsaProver, MlDsaVerifier>(&seed, &claim).expect("ok");
+            verify_once_with_seed::<MlDsaProver, MlDsaVerifier>(seed, &claim).expect("ok");
         assert!(
             verdict.is_valid_bool(),
             "honest claim with seed must verify"
@@ -281,8 +319,7 @@ mod tests {
         use crate::relations::hash_preimage::{HashPreimage, Witness};
         let seed = Seed::from_bytes(&[0xB3u8; 64]);
         let w = Witness { seed: [0x9Au8; 32] };
-        let verdict =
-            prove_and_verify_with_entropy::<HashPreimage>(&w, &seed).expect("relation ok");
+        let verdict = prove_and_verify_with_entropy::<HashPreimage>(&w, seed).expect("relation ok");
         assert!(
             verdict.is_valid_bool(),
             "honest hash-preimage proof must verify with explicit entropy"

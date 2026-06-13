@@ -22,13 +22,13 @@
 //! the leaf are revealed. It proves membership, it does not hide the member.
 //! Soundness rests on collision resistance of SHAKE256 (+ ROM for the transcript
 //! binding), so it is plausibly post-quantum. Research/educational, unaudited.
-
 extern crate alloc;
 use alloc::vec::Vec;
 
 use crate::common::{domain, Transcript, VeilError};
 use crate::relations::Relation;
 
+use core::sync::atomic::{compiler_fence, Ordering};
 use sha3::digest::{ExtendableOutput, Update, XofReader};
 use sha3::Shake256;
 use subtle::{Choice, ConstantTimeEq};
@@ -56,6 +56,9 @@ pub struct Proof {
 }
 
 fn h32(parts: &[&[u8]]) -> [u8; HASH] {
+    // SIDE-CHANNEL: T-table Keccak. Absorbs only public Merkle node bytes.
+    // See SPEC-HARDENING.md §"Cache timing and T-table side channels".
+    // Risk class: LOW (public tree).
     let mut xof = Shake256::default();
     for p in parts {
         xof.update(p);
@@ -169,10 +172,19 @@ impl Relation for MerkleInclusion {
 
     fn verify(stmt: &Statement, proof: &Proof) -> Result<Choice, VeilError> {
         if proof.leaf_count == 0 || proof.index >= proof.leaf_count {
-            return Ok(Choice::from(0u8));
+            // Side-channel hardening: a fence around the malformed-input
+            // rejection (CVE-2026-23519-style fragility).
+            compiler_fence(Ordering::SeqCst);
+            let c = Choice::from(0u8);
+            compiler_fence(Ordering::SeqCst);
+            return Ok(c);
         }
 
         // Replay the level reduction starting from the public leaf hash.
+        // Side-channel hardening: compiler_fence(SeqCst) around the
+        // accumulator and the final `ok & hash.ct_eq(...)` so the
+        // final state is observable across the function boundary.
+        compiler_fence(Ordering::SeqCst);
         let mut hash = stmt.leaf;
         let mut idx = proof.index;
         let mut n = proof.leaf_count;
@@ -206,7 +218,9 @@ impl Relation for MerkleInclusion {
         if used != proof.siblings.len() {
             ok = Choice::from(0u8);
         }
-        Ok(ok & hash.ct_eq(&stmt.root))
+        let result = ok & hash.ct_eq(&stmt.root);
+        compiler_fence(Ordering::SeqCst);
+        Ok(result)
     }
 }
 

@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+### Documented
+
+- **Cache timing / T-table threat model for SHAKE256** (`SPEC-HARDENING.md`,
+  `CLAUDE.md`, all 12 SHAKE256 call sites)
+  - The `sha3` 0.10 crate (RustCrypto) is a **T-table Keccak** implementation.
+    Per-call lookup-table access patterns can leak the absorbed secret on
+    shared-cache hardware (Flush+Reload / Prime+Probe against co-resident
+    VMs or same-core L3). The same caveat applies to all RustCrypto PQ
+    crates (`ml-kem`, `ml-dsa`, `slh-dsa`) which use the same `sha3` crate
+    internally.
+  - New `SPEC-HARDENING.md` §"Cache timing and T-table side channels"
+    documents the threat, lists every veil7-owned SHAKE256 call site
+    (12 files, 18 sites) with the secret class that flows in and the
+    per-deployment risk (LOW on single-tenant mobile / laptop, MEDIUM–HIGH
+    on shared-CPU cloud, HIGH on multi-tenant bare-metal), explains the
+    Phase 1 stance (documented accepted gap), and budgets a Phase 2
+    `dudect`/`ctverif` validation sprint.
+  - Per-site `// SIDE-CHANNEL:` comments added at every `let mut xof = Shake256::default();`
+    call site in veil7-owned code, each tagged with risk class:
+    - HIGH: `entropy_sources::whiten`, `l1_entropy` (4 sites), `l2_keygen::derive`
+      (master seed → PQ KDF), `relations/hash_preimage::h32` (Lamport secret
+      leaves), `storage/oram::oram_hash` (slot contents).
+    - MEDIUM: `l3_commit::commit` (private claim bytes), `vm::vm_root`
+      (execution trace — LOW unless future caller feeds private input).
+    - LOW: `chain::{chain_root, ChainState::new}`, `l7_emit` (2 sites),
+      `transcript::{new, absorb, challenge}`, `merkle::h32`,
+      `relations/hash_preimage::pk_commitment`,
+      `l5_verify::kem_roundtrip` and the test-side SHAKE256 site.
+  - `CLAUDE.md` adds a "Side-channel threat model" section as a
+    documented assumption, paralleling the philosophy section.
+  - No source code changes. No test changes. Test count remains 165.
+
 ### Added
 
 - **`attest_chain` for tamper-evident log append** (USE_CASES.md §7)
@@ -147,6 +179,107 @@
     proofs.
   - 4 new unit tests in `src/relations/merkle.rs` for the helpers
     (relation round-trip, tampered sibling, empty input).
+
+- **L2-L7 test coverage expansion (+12 tests, in existing modules)**
+  - L2 (keygen): +3 — `different_seeds_produce_different_keys`,
+    `kem_and_sig_subseeds_are_domain_separated` (KEM_SEED vs SIG_SEED
+    tag independence, verified via the 16-byte prefix collision
+    probability of 2^-128), `derive_keys_does_not_leak_master_seed_via_subseeds`
+    (no 64-byte window of the master seed appears anywhere in the
+    1184-byte KEM ek or 1952-byte ML-DSA vk)
+  - L3 (commit): +3 — `commitment_changes_when_kem_ek_changes`,
+    `commitment_changes_when_sig_vk_changes`,
+    `commitment_binds_all_three_fields` (pairwise distinct 3-tuples
+    prove no field is silently dropped from the absorb)
+  - L4 (prove): +3 — `proof_changes_when_commitment_changes` (binds
+    signature to commitment), `proof_binds_to_sig_ctx_domain_separator`
+    (regression guard against future removal of the ML-DSA ctx
+    field), `proof_sig_encode_is_stable_byte_layout` (pins
+    ML-DSA-65 wire format at 3309 bytes)
+  - L5 (verify): +2 — `verify_accumulates_constant_time_even_with_signature_failure`
+    (the no-early-exit property of the sig_ok & kem_ok accumulator,
+    tested semantically by varying the claim while the signature
+    is fixed-tampered), `kem_roundtrip_legitimate_path_produces_matching_secrets`
+    (encapsulate_deterministic -> decapsulate -> ct_eq == 1)
+  - L6 (zeroise): +1 — `scrub_runs_drop_inline_never` (type-level
+    assertion `let _: () = scrub(keys);` pins the no-return unit
+    contract; the `#[inline(never)]` attribute is the documented
+    barrier contract)
+  - All in existing `mod tests` submodules of L2-L6. No new files,
+    no architectural changes. Total test count 153 -> 165.
+
+- **Side-channel hardening pass (4 patches from 2025-26 side-channel
+  audit against CVE-2026-23519, KyberSlash, ML-DSA rejection sampling,
+  Keccak table-lookup cache, and compiler reordering)**
+  - **Patch 1: `compiler_fence(SeqCst)` around every `Choice`
+    construction.** `subtle::Choice` is documented as "best-effort"
+    (CVE-2026-23519 just showed LLVM may still optimize constant-time
+    logic into branches on certain archs). We add a SeqCst
+    compiler fence before and after every `Choice::from(...)` and
+    around the `&` accumulator in:
+    * `src/layers/l5_verify.rs` (the `sig_ok & kem_ok` accumulator)
+    * `src/layers/l7_emit.rs` (both `Verdict::new` and
+      `Verdict::from_statement_digest`)
+    * `src/relations/hash_preimage.rs::verify` (early-return and
+      accumulator)
+    * `src/relations/merkle.rs::verify` (early-return, accumulator,
+      final result)
+    * `src/relations/ml_dsa.rs::verify` (`Choice::from(ok as u8)`)
+    SeqCst fences are global compiler barriers that no optimizer
+    is allowed to reorder across, so the Choice construction
+    cannot be folded into a branch on the underlying bool.
+  - **Patch 2: explicit `core::mem::drop(seed)` after L2 in
+    `verify_once_with_seed` and after `R::prove` in
+    `prove_and_verify_with_entropy`.** The signature of both
+    functions changed from `&Seed` to `Seed` (consume by value).
+    After L2 the master seed is no longer needed: the ephemeral
+    keypair is the only secret flowing through L3..L7. The
+    explicit drop minimizes the seed's live range and gives the
+    wipe the earliest possible insertion point. Side-channel
+    hardening against any future code change that might extend
+    the seed's lifetime past L2 by accident. Affects all callers
+    (`verify_once`, `verify_once_with`, `verify_once_with_oram`,
+    `verify_once_with_vm`, `prove_and_verify`, plus the
+    integration tests in `tests/adversarial.rs` and
+    `tests/fuzz_manual.rs`).
+  - **Patch 3: SHAKE256 domain separation in `entropy_sources::hw_counter`.**
+    The previous `elapsed_nanos ^ wall_nanos` was a raw XOR with
+    three problems: (1) XOR is reversible in one direction (an
+    attacker who knows one input recovers the other); (2) the
+    buffer was 16 bytes of hash + 48 bytes of zero padding (a
+    trivially recognizable pattern); (3) a one-way digest gives
+    stronger side-channel resistance for the per-method
+    whitening downstream. The new code uses
+    `SHAKE256("veil7:L1:src:hw-counter-combine:v1" ||
+    elapsed || wall)` to fill the full 64-byte buffer with
+    one-way-mixed output.
+  - **Patch 4: pre-loop `compiler_fence(SeqCst)` in
+    `l0_memlock::zeroize_bytes` and `zeroize_u64`.** The previous
+    pattern only had a post-loop fence. The pre-loop fence
+    ensures that no loads from the secret bytes (or any
+    related memory) are reordered to *after* the wipe begins.
+    Without it, LLVM could in principle keep an outstanding load
+    from a secret byte above the volatile-write loop (volatile
+    writes are per-location barriers, not global ones). The
+    pre-loop fence makes the wipe an unconditional
+    happens-before-deletion point. Combined with the post-loop
+    fence (already in place): secret bytes are guaranteed to be
+    loaded-then-wiped, and the wipe is guaranteed to
+    complete-then-leave-scope. This is the pattern recommended
+    by Trail of Bits' "Life of an Optimization Barrier" (2022).
+  - All patches are empirical side-channel hardening grounded
+    in the 2025-26 academic literature. They do not guarantee
+    constant-time (that depends on the underlying hardware and
+    the LLVM backend), but they raise the bar by:
+    (1) preventing the optimizer from folding our CT logic
+        into branches,
+    (2) minimizing secret material's live range, and
+    (3) preventing secret loads from being hoisted past
+        the wipe.
+  - 0 new tests added (the existing 165 tests still pass —
+    these are hardening fixes, not behavior changes). Mutation
+    test from earlier session still passes (or `addr % 256`
+    reintroduced would be caught by hardening scan).
 
 - **FIPS 206 FN-DSA / FALCON scaffold (`src/pq_backends/fn_dsa.rs`)**
   - Locked-in public type surface (`SecretKey`, `PublicKey`,

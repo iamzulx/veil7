@@ -111,6 +111,12 @@ impl EntropySource {
     ///
     /// Each call returns a fresh `[u8; 64]`. The raw buffer is
     /// **not** mutated; call `wipe` to destroy it.
+    ///
+    /// SIDE-CHANNEL: SHAKE256 here absorbs **raw OS entropy bytes** (CSPRNG
+    /// output, jitter, time-of-day). On shared-cache hardware an attacker can
+    /// recover the per-source raw bits via Flush+Reload / Prime+Probe against
+    /// the Keccak T-tables. See `SPEC-HARDENING.md` §"Cache timing and T-table
+    /// side channels". Risk class for this call: **HIGH** (raw entropy input).
     pub fn whiten(&self) -> [u8; SOURCE_LEN] {
         let mut xof = Shake256::default();
         xof.update(self.domain_tag);
@@ -269,23 +275,42 @@ pub fn thread_id() -> EntropySource {
 /// `RDTSC` on x86/x86_64, `mach_absolute_time` on macOS,
 /// `QueryPerformanceCounter` on Windows. Using `Instant` rather than
 /// raw inline asm keeps this function `unsafe`-free and portable.
+///
+/// The two nanos readings are combined with a domain-separated
+/// SHAKE256 squeeze, not a raw XOR. Reasons:
+///   * Domain separation: an attacker who knows `elapsed_nanos`
+///     (or `wall_nanos`) cannot recover the other from the combined
+///     buffer. The raw XOR was reversible in one direction;
+///     the SHAKE256 squeeze is one-way.
+///   * Length: the source buffer is 64 bytes. `to_le_bytes()` of a
+///     single u128 is 16 bytes; the remaining 48 bytes were zero
+///     in the XOR path. The SHAKE256 squeeze fills all 64 bytes
+///     with output that is bounded by both inputs jointly, so
+///     the buffer is no longer a "16-byte hash + 48 zero padding"
+///     pattern that an attacker could trivially recognise.
+///   * Pre-rotation: the per-method whiten still XORs into the pool
+///     (in `harvest_multi_source`), but the source itself now carries
+///     a one-way digest of its inputs rather than a direct copy.
+///     This is the side-channel hardening recommended in the 2025-26
+///     audit: avoid leaking raw input patterns into the whiten step.
 #[cfg(feature = "std")]
 pub fn hw_counter() -> EntropySource {
-    let mut raw = [0u8; SOURCE_LEN];
-    // `Instant::elapsed()` is backed by a hardware counter on every
-    // supported target (CNTVCT_EL0 on aarch64, RDTSC on x86, etc.).
-    // Combining it with the wall-clock nanos gives a 16-byte buffer
-    // that varies between calls and across processes. Both
-    // measurements are non-cryptographic; the per-method domain tag
-    // whitens them into the pool so the raw timestamp is not exposed
-    // to the final seed.
+    use sha3::digest::{ExtendableOutput, Update, XofReader};
+    use sha3::Shake256;
+
     let elapsed_nanos = std::time::Instant::now().elapsed().as_nanos();
     let wall_nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    let combined = elapsed_nanos ^ wall_nanos;
-    raw[..16].copy_from_slice(&combined.to_le_bytes());
+
+    let mut raw = [0u8; SOURCE_LEN];
+    let mut xof = Shake256::default();
+    xof.update(b"veil7:L1:src:hw-counter-combine:v1");
+    xof.update(&elapsed_nanos.to_le_bytes());
+    xof.update(&wall_nanos.to_le_bytes());
+    xof.finalize_xof().read(&mut raw);
+
     EntropySource::from_raw("hw_counter", domain::ENTROPY_SOURCE_HW_COUNTER, raw)
 }
 

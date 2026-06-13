@@ -132,6 +132,12 @@ impl Drop for ObliviousRAM {
 
 // ── ORAM hash (SHAKE256 → 64 bytes) ─────────────────────────────────────────
 
+// SIDE-CHANNEL: T-table Keccak. The ORAM's whole purpose is to hide the slot
+// being read, but the SHAKE256 lookup table leaks the absorbed `input` bytes
+// on shared-cache hardware — partially undoing the ORAM's protection. See
+// `SPEC-HARDENING.md` §"Cache timing and T-table side channels". Risk class:
+// **MEDIUM** (private slot contents and address material flow into the table).
+
 fn oram_hash(input: &[u8]) -> [u8; 64] {
     let mut out = [0u8; 64];
     let mut xof = Shake256::default();

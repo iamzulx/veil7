@@ -31,8 +31,28 @@ use core::sync::atomic::{compiler_fence, Ordering};
 
 /// Wipe bytes with volatile stores plus a compiler fence, so the scrub cannot be
 /// elided as a dead store or reordered past a security boundary.
+///
+/// The **pre-loop** `compiler_fence(SeqCst)` ensures that no loads from the
+/// secret bytes (or any related memory) are reordered to *after* the
+/// wipe begins. Without this fence, LLVM could in principle keep an
+/// outstanding load from a secret byte above the volatile-write loop
+/// (the volatile writes are per-location barriers, not global ones).
+/// The pre-loop fence makes the wipe an unconditional
+/// happens-before-deletion point.
+///
+/// The **post-loop** `compiler_fence(SeqCst)` ensures that no loads from
+/// the wiped region can be hoisted *past* the wipe, so a downstream
+/// read sees the zeroed memory even if the optimizer would otherwise
+/// have re-ordered the load to before the wipe completed.
+///
+/// Together: secret bytes are guaranteed to be loaded-then-wiped, and the
+/// wipe is guaranteed to complete-then-leave-scope. This is the
+/// side-channel hardening recommended by Trail of Bits' "Life of an
+/// Optimization Barrier" (2022) and the pattern used by `subtle`'s
+/// `Choice` optimization barrier.
 #[inline(never)]
 pub(crate) fn zeroize_bytes(bytes: &mut [u8]) {
+    compiler_fence(Ordering::SeqCst);
     for b in bytes.iter_mut() {
         // SAFETY: `b` is a valid, uniquely borrowed byte. Volatile write is used
         // only to force the store to happen; it does not create aliasing.
@@ -43,9 +63,10 @@ pub(crate) fn zeroize_bytes(bytes: &mut [u8]) {
     compiler_fence(Ordering::SeqCst);
 }
 
-/// Wipe a `u64` scalar with a volatile store plus compiler fence.
+/// Wipe a `u64` scalar with a volatile store plus a compiler fence.
 #[inline(never)]
 pub(crate) fn zeroize_u64(word: &mut u64) {
+    compiler_fence(Ordering::SeqCst);
     // SAFETY: `word` is a valid, uniquely borrowed scalar. Volatile write is
     // used only to force the store to happen; it does not create aliasing.
     unsafe {

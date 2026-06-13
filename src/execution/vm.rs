@@ -142,6 +142,12 @@ impl MicroVM {
 
 // ── Root derivation ──────────────────────────────────────────────────────────
 
+// SIDE-CHANNEL: T-table Keccak. The absorbed `trace` is the deterministic
+// post-execution VM state; depending on how the VM is invoked (public bytecode,
+// no secrets in registers) the trace is treated as public. If a future caller
+// runs a VM with private input, this call re-classifies to MEDIUM. See
+// SPEC-HARDENING.md §"Cache timing and T-table side channels". Current risk
+// class: LOW (public execution trace).
 fn vm_root(trace: &[u8; 64]) -> [u8; 64] {
     let mut out = [0u8; 64];
     let mut xof = Shake256::default();

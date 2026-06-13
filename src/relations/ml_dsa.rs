@@ -32,6 +32,7 @@ use crate::relations::Relation;
 use ml_dsa::{KeyInit as _, Keypair as _, MlDsa65, Signature, SigningKey, VerifyingKey};
 use ml_kem::array::Array; // shared hybrid-array type used to build the 32-byte seed
 
+use core::sync::atomic::{compiler_fence, Ordering};
 use subtle::Choice;
 
 /// Protocol label binding the transcript to this relation.
@@ -129,7 +130,16 @@ impl Relation for MlDsaKnowledge {
     fn verify(stmt: &Statement, proof: &Proof) -> Result<Choice, VeilError> {
         let msg = challenge_for(stmt);
         let ok = stmt.vk.verify_with_context(&msg, CTX, &proof.sig);
-        Ok(Choice::from(ok as u8))
+        // Side-channel hardening: a fence around the Choice::from so
+        // the boolean -> Choice conversion is observable across the
+        // function boundary. The upstream `verify_with_context`
+        // returns `bool` internally (which we accept as documented
+        // best-effort), but the *transformation* into our accumulator
+        // type is now fence-protected.
+        compiler_fence(Ordering::SeqCst);
+        let c = Choice::from(ok as u8);
+        compiler_fence(Ordering::SeqCst);
+        Ok(c)
     }
 }
 

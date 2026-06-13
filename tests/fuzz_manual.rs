@@ -110,6 +110,6 @@ fn fuzz_seed_based_never_panics() {
         let _ = verify_once_with_seed::<
             veil7::l4_prove::MlDsaProver,
             veil7::l5_verify::MlDsaVerifier,
-        >(&seed, &claim);
+        >(seed, &claim);
     }
 }
