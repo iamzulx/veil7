@@ -11,12 +11,12 @@ metadata, no trace, no persisted state.
 Verified on aarch64-android (Termux), Rust 1.95.0:
 
 - `cargo build` / `cargo build --release` — clean
-- `cargo test` — **265 tests** (217 unit + 48 integration/doc), all passing
+- `cargo test` — **367 tests** (226 unit + 141 integration), all passing
 - `cargo clippy --all-targets -- -D warnings` — clean (zero warnings)
 - `cargo fmt --check` — clean
 - `cargo check --no-default-features` — clean (`#![no_std]` + `alloc` compatible)
 - Release binary: ~480 KB, stripped (no symbols)
-- ~9 900 lines of Rust
+- ~11 000 lines of Rust
 
 ## Design invariants
 
@@ -34,8 +34,9 @@ These are enforced by construction, not by policy or runtime checks:
 - **Stateless** — every iteration regenerates its entire cryptographic context
   from freshly harvested entropy. Nothing persists between calls; there is no
   global or static mutable state.
-- **Post-quantum** — ML-KEM-768 (FIPS 203) + ML-DSA-65 (FIPS 204) + SHAKE256,
-  all pure-Rust RustCrypto crates (no C dependencies).
+- **Post-quantum** — ML-KEM-768 (FIPS 203) + ML-DSA-65 (FIPS 204) via **libcrux**
+  (hax/F\* formally verified) + SHAKE256. Validated against official NIST ACVP
+  test vectors (byte-perfect match). No C dependencies.
 - **Auto-zeroise** — veil7-owned secret buffers are wiped with volatile stores
   plus a compiler fence; upstream PQ key material uses dependency
   `ZeroizeOnDrop` and is explicitly dropped at the L6 barrier before the verdict
@@ -94,13 +95,14 @@ the same machinery proves and verifies it via the Fiat-Shamir transform over a
 shared transcript. Swap the relation, the verification path is unchanged — that
 is what "universal" means here.
 
-Four working relations ship as proof of generality, each a different
+Five working relations ship as proof of generality, each a different
 cryptographic family routed through the *same* `prove_and_verify::<R>` entry:
 
 - `hash_preimage` — pure-hash (Lamport-style) proof of knowledge
 - `ml_dsa` — ML-DSA-65 lattice-signature knowledge
 - `merkle` — Merkle-tree set membership (inclusion proof)
 - `pedersen` — SHAKE256 commitment opening proof (value + blinding factor)
+- `range_proof` — prove value ∈ [min, max] without revealing it
 
 Plus a demo relation for real-data testing:
 - `math_sum` (in `tests/real_data.rs`) — proves knowledge of `a` and `b`
@@ -312,8 +314,8 @@ cryptographic substrate:
 | Standard | Algorithm | Security | Status (Juni 2026) | veil7 backend |
 |---|---|---|---|---|
 | [FIPS 202](https://nvlpubs.nist.gov/nistpubs/fips/nist.fips.202.pdf) (2015) | SHA-3 / SHAKE256 | 256-bit hash | Final | `sha3 0.10.9` |
-| [FIPS 203](https://csrc.nist.gov/pubs/fips/203/final) (Aug 13, 2024) | ML-KEM-768 | NIST Cat 3 (~192-bit PQ) | **Final** | `ml-kem 0.3.2` |
-| [FIPS 204](https://csrc.nist.gov/pubs/fips/204/final) (Aug 13, 2024) | ML-DSA-65 | NIST Cat 3 (~192-bit PQ) | **Final** | `ml-dsa 0.1.0` |
+| [FIPS 203](https://csrc.nist.gov/pubs/fips/203/final) (Aug 13, 2024) | ML-KEM-768 | NIST Cat 3 (~192-bit PQ) | **Final** | `libcrux-ml-kem 0.0.9` ✅ ACVP |
+| [FIPS 204](https://csrc.nist.gov/pubs/fips/204/final) (Aug 13, 2024) | ML-DSA-65 | NIST Cat 3 (~192-bit PQ) | **Final** | `libcrux-ml-dsa 0.0.9` ✅ ACVP |
 | [FIPS 205](https://csrc.nist.gov/pubs/fips/205/final) (Aug 13, 2024) | SLH-DSA-SHAKE-128f | NIST Cat 1 (~128-bit PQ, hash-based) | **Final** | `slh-dsa 0.2.0-rc.5` |
 
 **Why Cat 3?** NIST IR 8547 (Transition to PQC Standards) requires
@@ -329,8 +331,9 @@ rest of the engine:
 
 ```
 src/pq_backends/
-├── slh_dsa.rs   — FIPS 205 SLH-DSA-SHAKE-128f (active)
-└── fn_dsa.rs    — FIPS 206 FN-DSA / FALCON (scaffold, see below)
+├── libcrux_backend.rs — ML-KEM-768 + ML-DSA-65 via libcrux (active, NIST ACVP validated)
+├── slh_dsa.rs         — FIPS 205 SLH-DSA-SHAKE-128f (active)
+└── fn_dsa.rs          — FIPS 206 FN-DSA / FALCON (scaffold, see below)
 ```
 
 **FIPS 206 (FN-DSA / FALCON) — scaffold, not yet integrated:**
@@ -404,12 +407,15 @@ These do not change the stateless contract — nothing persists between calls.
 
 ```sh
 cargo run --release          # demo: runs all four pipelines, prints verdicts
-cargo test                   # full suite (222 tests)
-cargo test --test hardening  # side-channel regression guards
-cargo test --test bench      # lightweight iteration benchmarks
-cargo test --test adversarial # forged-proof negative tests
-cargo test --test fuzz_manual # random-input stress test
-cargo test --test real_data  # real .txt file + custom MathSum relation
+cargo test                     # full suite (367 tests)
+cargo test --test nist_acvp    # NIST ACVP official test vectors
+cargo test --test cavp         # CAVP-style internal validation
+cargo test --test hardening    # side-channel regression guards
+cargo test --test bench        # lightweight iteration benchmarks
+cargo test --test adversarial  # forged-proof negative tests
+cargo test --test fuzz_manual  # random-input stress test
+cargo test --test race_conditions # thread-safety stress tests
+cargo test --test real_data    # real .txt file + custom MathSum relation
 cargo clippy --all-targets -- -D warnings
 bash scripts/check-hardening.sh
 ```
@@ -444,8 +450,10 @@ This is a research/educational construction. It is correct and tested, but:
 
 - Soundness of the Fiat-Shamir relations holds in the **Random Oracle Model**
   (SHAKE256 modelled as a random oracle).
-- The PQ crates (`ml-dsa` 0.1, `ml-kem` 0.3, `slh-dsa` 0.2.0-rc.5) are
-  **unaudited** pre-1.0 RustCrypto implementations.
+- ML-KEM-768 and ML-DSA-65 are provided by **libcrux** (Cryspen), which is
+  formally verified via hax/F\* for memory safety and functional correctness.
+  Validated against official NIST ACVP test vectors (byte-perfect match).
+- `slh-dsa` 0.2.0-rc.5 (RustCrypto) remains **unaudited** pre-1.0.
 - "Constant-time" relies on `subtle`, veil7 source guards, and the underlying
   crates' own CT behavior; it has not been verified against a hardware
   side-channel model.
@@ -470,18 +478,24 @@ src/
   entropy_sources.rs  multi-method entropy harvest (6 independent sources)
   common/             domain tags, error type, Fiat-Shamir transcript
   layers/             L0..L7
-  relations/          Relation trait + hash_preimage, merkle, ml_dsa, pedersen
-  pq_backends/        SLH-DSA backend + FALCON scaffold
+  relations/          Relation trait + hash_preimage, merkle, ml_dsa, pedersen, range_proof
+  pq_backends/        libcrux backend (ML-KEM/ML-DSA) + SLH-DSA + FALCON scaffold
   storage/            ObliviousRAM + read_modify_write + swap
   execution/          MicroVM (17 opcodes + BytecodeBuilder)
 tests/
-  hardening.rs        source-level invariant guards
-  bench.rs            lightweight performance baselines
-  fuzz_manual.rs      random-input stress tests (no cargo-fuzz)
-  adversarial.rs      forged-proof negative tests
-  real_data.rs        real .txt file + demo MathSum relation
+  nist_acvp.rs        NIST ACVP official test vector validation (6 tests)
+  cavp.rs             CAVP-style internal validation (14 tests)
+  hardening.rs        source-level invariant guards (5 tests)
+  race_conditions.rs  thread-safety stress tests (23 tests)
+  bench.rs            lightweight performance baselines (10 tests)
+  fuzz_manual.rs      random-input stress tests (14 tests)
+  adversarial.rs      forged-proof negative tests (24 tests)
+  new_features.rs     integration tests for new modules (29 tests)
+  real_data.rs        real .txt file + demo MathSum relation (15 tests)
+  vectors/            NIST ACVP test vector files (ML-KEM-768, ML-DSA-65)
 scripts/
   check-hardening.sh
   scan-secret-div.py
+  generate-sbom.sh    CycloneDX SBOM generator
 math_claims.txt       sample data for real_data test
 ```

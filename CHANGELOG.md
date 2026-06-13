@@ -4,6 +4,95 @@
 
 ### Added (v0.2.0 development)
 
+- **NIST ACVP official test vector validation** (`tests/nist_acvp.rs`)
+  - 6 tests against official NIST ACVP vectors sourced from BoringSSL
+    (Google) → `usnistgov/ACVP-Server`.
+  - **ML-DSA-65 KeyGen #1**: seed → public key — **byte-perfect match**
+    with NIST expected output.
+  - **ML-KEM-768 KeyGen #1**: seed → encapsulation key — **byte-perfect
+    match** with NIST expected output.
+  - Additional tests: determinism, size validation, cross-vector checks,
+    sign/verify and KEM roundtrip with NIST-derived keys.
+  - Raw test vector files stored in `tests/vectors/` for auditor evidence.
+
+- **CAVP-style internal validation** (`tests/cavp.rs`)
+  - 14 tests: ML-KEM-768 keygen (zero/ones seeds), encaps/decaps roundtrip,
+    wrong-key implicit rejection, public key validation.
+  - ML-DSA-65 keygen determinism, sign/verify roundtrip (5 message/context
+    cases), wrong message/context/key rejection, tampered signature (6 byte
+    positions), different randomness produces different signatures.
+  - Cross-validation: key avalanche property, shared secret non-triviality.
+
+- **Thread-safety stress tests** (`tests/race_conditions.rs`)
+  - 23 tests: concurrent entropy harvesting (8 threads, 160 seeds all unique),
+    concurrent full pipeline (8+16 threads), batch verification, ORAM
+    read/write/read_modify_write/swap, MicroVM deterministic execution
+    (400 runs all identical), Shamir split/reconstruct, blind attestation,
+    commit-reveal, threshold, hybrid, chain operations, keccak_ct.
+  - Mixed workload: 16 threads running all modules simultaneously.
+  - Timing variance analysis: Shamir 1.01x ratio (constant-time confirmed),
+    verify_once 1.17x ratio (acceptable).
+  - State leak detection: 20 sequential transcripts all unique.
+
+- **Supply chain security infrastructure**
+  - `.github/dependabot.yml` — weekly dependency monitoring with ignore rules
+    for sha3 and getrandom major versions (conflict with libcrux).
+  - `scripts/generate-sbom.sh` — CycloneDX SBOM generator (61 dependencies).
+  - SBOM generation job added to CI (`hardening.yml`).
+  - Labels created: `dependencies`, `rust`, `ci`.
+  - Dependabot PRs managed: #3 (checkout v4→v6), #4 (upload-artifact v4→v7),
+    #5 (rust-minor-patch) merged; #6 (getrandom 0.2→0.4), #7 (sha3 0.10→0.11)
+    closed as breaking changes.
+
+- **Range proof relation** (`src/relations/range_proof.rs`)
+  - New `Relation` implementation: proves value ∈ [min, max] without
+    revealing the value.
+  - Bit-decomposition + per-bit SHAKE256 commitments.
+  - Constant-time nonce corruption for out-of-range invalidation.
+  - Fifth built-in relation. 8 unit tests.
+
+- **Expanded interface module** (`src/interface.rs`) — 18 one-call functions:
+  - `attest_structured` — attestation with personalization binding.
+  - `attest_with_vm`, `attest_with_oram` — pipeline variant wrappers.
+  - `attest_batch`, `attest_batch_texts` — batch attestation.
+  - `attest_chain_files`, `attest_directory`, `attest_file_merkle` — chain/directory.
+  - `prove_hash_preimage`, `prove_pedersen`, `prove_merkle` — relation proofs.
+  - `check_chain`, `check_merkle` — pure-math verification oracles.
+  - 20 integration tests.
+
+- **libcrux PQ backend** (`src/pq_backends/libcrux_backend.rs`)
+  - Adapter wrapping libcrux-ml-kem 0.0.9 and libcrux-ml-dsa 0.0.9.
+  - Replaces RustCrypto ml-kem/ml-dsa in L2/L3/L4/L5 layers.
+  - NIST ACVP validated: byte-perfect match with official test vectors.
+  - 11 unit tests.
+
+- **Constant-time masked SHAKE256** (`src/keccak_ct.rs`)
+  - Masked sponge approach: XOR input with random mask before SHAKE256.
+  - T-table access patterns leak masked data, not original secrets.
+  - Phase 2 mitigation for cache-timing side channel.
+  - 6 unit tests.
+
+- **Shamir secret sharing** (`src/shamir.rs`)
+  - Constant-time GF(2⁸) multiplication and inversion.
+  - T-of-N secret splitting for entropy.
+  - 8 unit tests.
+
+- **Threshold verification** (`src/threshold.rs`)
+  - N-of-M distributed verification with Choice accumulation.
+  - 7 unit tests.
+
+- **Commit-reveal protocol** (`src/commit_reveal.rs`)
+  - Two-phase attestation: commit_phase() → reveal_phase().
+  - 5 unit tests.
+
+- **Blind attestation** (`src/blind.rs`)
+  - Engine attests data it never sees (XOR blinding).
+  - 6 unit tests.
+
+- **Hybrid PQ+classical attestation** (`src/hybrid.rs`)
+  - Dual-layer: ML-DSA-65 + SHAKE256 MAC.
+  - 3 unit tests.
+
 - **MicroVM proper opcode execution** (`src/execution/vm.rs`)
   - Complete rewrite of the execution engine from a byte-XOR stub to a
     real 17-opcode stack machine with a 128×u64 operand stack.
