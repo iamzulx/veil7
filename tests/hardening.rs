@@ -12,7 +12,8 @@ use veil7::l4_prove::Proof as L4Proof;
 use veil7::l5_verify::{MlDsaVerifier, Verifier};
 use veil7::pq_backends::slh_dsa::{PublicKey, SignatureBytes, SlhDsaSigner};
 use veil7::relations::{
-    hash_preimage::HashPreimage, merkle::MerkleInclusion, ml_dsa::MlDsaKnowledge, Relation,
+    hash_preimage::HashPreimage, merkle::MerkleInclusion, ml_dsa::MlDsaKnowledge,
+    pedersen::PedersenCommitment, range_proof::RangeProof, Relation,
 };
 use veil7::VeilError;
 
@@ -79,6 +80,8 @@ fn verification_public_boundaries_return_choice() {
     assert_relation::<HashPreimage>();
     assert_relation::<MerkleInclusion>();
     assert_relation::<MlDsaKnowledge>();
+    assert_relation::<PedersenCommitment>();
+    assert_relation::<RangeProof>();
 
     fn assert_verifier<V: Verifier>() {
         let _: fn(&EphemeralKeys, &[u8], &L4Proof) -> Result<Choice, VeilError> = V::verify;

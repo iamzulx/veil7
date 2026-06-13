@@ -7,6 +7,8 @@ use veil7::relations::{
     hash_preimage::{HashPreimage, Proof as HashProof, Witness as HashWitness},
     merkle::{MerkleInclusion, Proof as MerkleProof, Witness as MerkleWitness},
     ml_dsa::{MlDsaKnowledge, Witness as MlDsaWitness},
+    pedersen::{PedersenCommitment, Proof as PedersenProof, Witness as PedersenWitness},
+    range_proof::{Proof as RangeProofObj, RangeProof, Witness as RangeWitness},
     Relation,
 };
 use veil7::{prove_and_verify_with_entropy, verify_once, verify_once_with_seed, Claim};
@@ -225,5 +227,140 @@ fn prove_and_verify_with_wrong_entropy_fails_deterministic() {
         v1.transcript(),
         v2.transcript(),
         "deterministic relation ignores entropy"
+    );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// PedersenCommitment adversarial
+// ────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn pedersen_wrong_value_fails() {
+    let w = PedersenWitness {
+        value: [0x11; 32],
+        blinding: [0x22; 32],
+    };
+    let (stmt, _) = PedersenCommitment::prove(&w, &[]).unwrap();
+    let bad = PedersenProof {
+        value: [0x12; 32],
+        blinding: [0x22; 32],
+    };
+    let ok = PedersenCommitment::verify(&stmt, &bad).expect("no panic");
+    assert_eq!(ok.unwrap_u8(), 0, "wrong value must fail");
+}
+
+#[test]
+fn pedersen_wrong_blinding_fails() {
+    let w = PedersenWitness {
+        value: [0x11; 32],
+        blinding: [0x22; 32],
+    };
+    let (stmt, _) = PedersenCommitment::prove(&w, &[]).unwrap();
+    let bad = PedersenProof {
+        value: [0x11; 32],
+        blinding: [0x23; 32],
+    };
+    let ok = PedersenCommitment::verify(&stmt, &bad).expect("no panic");
+    assert_eq!(ok.unwrap_u8(), 0, "wrong blinding must fail");
+}
+
+#[test]
+fn pedersen_tampered_statement_fails() {
+    let w = PedersenWitness {
+        value: [0x33; 32],
+        blinding: [0x44; 32],
+    };
+    let (mut stmt, proof) = PedersenCommitment::prove(&w, &[]).unwrap();
+    stmt.commitment[0] ^= 0xFF;
+    let ok = PedersenCommitment::verify(&stmt, &proof).expect("no panic");
+    assert_eq!(ok.unwrap_u8(), 0, "tampered commitment must fail");
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// RangeProof adversarial
+// ────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn range_proof_out_of_range_rejected_at_prove() {
+    let w = RangeWitness {
+        value: 999,
+        min: 0,
+        max: 100,
+    };
+    assert!(
+        RangeProof::prove(&w, &[]).is_err(),
+        "value above max must be rejected at prove"
+    );
+}
+
+#[test]
+fn range_proof_tampered_nonce_fails() {
+    let w = RangeWitness {
+        value: 50,
+        min: 0,
+        max: 100,
+    };
+    let (stmt, mut proof) = RangeProof::prove(&w, &[]).unwrap();
+    if let Some(nonce) = proof.nonces.first_mut() {
+        nonce[0] ^= 0xFF;
+    }
+    let ok = RangeProof::verify(&stmt, &proof).expect("no panic");
+    assert_eq!(ok.unwrap_u8(), 0, "tampered nonce must fail");
+}
+
+#[test]
+fn range_proof_wrong_length_proof_fails() {
+    let w = RangeWitness {
+        value: 50,
+        min: 0,
+        max: 100,
+    };
+    let (stmt, _) = RangeProof::prove(&w, &[]).unwrap();
+    let bad = RangeProofObj {
+        bits: vec![0],
+        nonces: vec![[0u8; 32]],
+    };
+    let ok = RangeProof::verify(&stmt, &bad).expect("no panic");
+    assert_eq!(ok.unwrap_u8(), 0, "wrong-length proof must fail");
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Threshold adversarial
+// ────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn threshold_invalid_params_rejected() {
+    let claim = Claim::new(b"x");
+    assert!(veil7::threshold::threshold_verify(&claim, 0, 3).is_err());
+    assert!(veil7::threshold::threshold_verify(&claim, 4, 3).is_err());
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Commit-Reveal adversarial
+// ────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn commit_reveal_replay_with_different_claim_fails() {
+    let (token, nonce) = veil7::commit_reveal::commit_phase(b"bid-100").unwrap();
+    let result = veil7::commit_reveal::reveal_phase(&token, &nonce, b"bid-200");
+    assert!(result.is_err(), "replay with different claim must fail");
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Blind adversarial
+// ────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn blind_wrong_factor_unblinds_differently() {
+    let claim = b"test-data";
+    let f1 = veil7::blind::BlindFactor::from_nonce([0x01; 32]);
+    let f2 = veil7::blind::BlindFactor::from_nonce([0x02; 32]);
+    let blinded = veil7::blind::blind_claim(claim, &f1);
+    let v = verify_once(&Claim::new(&blinded)).unwrap();
+    let u1 = veil7::blind::unblind_transcript(v.transcript(), &f1);
+    let u2 = veil7::blind::unblind_transcript(v.transcript(), &f2);
+    assert_ne!(
+        u1, u2,
+        "wrong factor must produce different unblinded transcript"
     );
 }

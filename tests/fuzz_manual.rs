@@ -113,3 +113,85 @@ fn fuzz_seed_based_never_panics() {
         >(seed, &claim);
     }
 }
+
+// ── New module fuzz tests ──────────────────────────────────────────────────
+
+#[test]
+fn fuzz_blind_attest_never_panics() {
+    for i in 0..16usize {
+        let payload = random_vec(16 + (i % 48));
+        let _ = veil7::blind::blind_attest(&payload);
+    }
+}
+
+#[test]
+fn fuzz_commit_reveal_never_panics() {
+    for _ in 0..16 {
+        let payload = random_vec(32);
+        let result = veil7::commit_reveal::commit_phase(&payload);
+        if let Ok((token, nonce)) = result {
+            let _ = veil7::commit_reveal::reveal_phase(&token, &nonce, &payload);
+        }
+    }
+}
+
+#[test]
+fn fuzz_threshold_never_panics() {
+    for _ in 0..4 {
+        let payload = random_vec(16);
+        let claim = Claim::new(&payload);
+        let _ = veil7::threshold::threshold_verify(&claim, 2, 3);
+    }
+}
+
+#[test]
+fn fuzz_shamir_split_reconstruct_never_panics() {
+    for _ in 0..8 {
+        let secret = random_bytes::<64>();
+        if let Some(shares) = veil7::shamir::split(&secret, 3, 2) {
+            let subset = [
+                veil7::shamir::Share {
+                    index: shares[0].index,
+                    data: shares[0].data,
+                },
+                veil7::shamir::Share {
+                    index: shares[1].index,
+                    data: shares[1].data,
+                },
+            ];
+            let _ = veil7::shamir::reconstruct(&subset);
+        }
+    }
+}
+
+#[test]
+fn fuzz_hybrid_attest_never_panics() {
+    for _ in 0..4 {
+        let payload = random_vec(32);
+        let claim = Claim::new(&payload);
+        let _ = veil7::hybrid::hybrid_attest(&claim);
+    }
+}
+
+#[test]
+fn fuzz_ct_shake256_never_panics() {
+    for i in 0..32usize {
+        let data = random_vec(1 + (i % 128));
+        let mut out = [0u8; 32];
+        veil7::keccak_ct::ct_shake256(&data, &mut out);
+    }
+}
+
+#[test]
+fn fuzz_range_proof_honest_always_valid() {
+    for i in 0..8usize {
+        let min: u64 = (i as u64 * 123) % 1000;
+        let range: u64 = 1 + ((i as u64 * 457) % 1000);
+        let max = min + range;
+        let value = min + ((i as u64 * 31) % range);
+        let w = veil7::relations::range_proof::Witness { value, min, max };
+        let v = veil7::prove_and_verify::<veil7::relations::range_proof::RangeProof>(&w, b"fuzz")
+            .expect("no panic");
+        assert!(v.is_valid_bool(), "honest range proof must verify");
+    }
+}
