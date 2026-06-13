@@ -1,5 +1,5 @@
-# Persamaan Matematika Ringan - Test Universal Verification veil7
-# Format per baris: a,b,s  (membuktikan bahwa a + b = s)
+# Light Mathematical Equations - veil7 Universal Verification Test
+# Format per line: a,b,s  (proving that a + b = s)
 
 7,8,15
 42,58,100
