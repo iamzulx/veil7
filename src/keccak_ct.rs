@@ -33,6 +33,9 @@
 //! - **Wipe outside boundary**: masks are wiped after use.
 //! - **Math over abstraction**: XOR masking is simple, auditable math.
 
+extern crate alloc;
+use alloc::vec;
+
 use crate::l0_memlock::zeroize_bytes;
 
 use sha3::digest::{ExtendableOutput, Update, XofReader};
@@ -55,13 +58,13 @@ impl CtShake256 {
     /// input will produce different internal states (but the same
     /// final output after unmasking — see `ct_finalize`).
     #[cfg(feature = "std")]
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, crate::VeilError> {
         let mut mask = [0u8; 32];
-        let _ = getrandom::getrandom(&mut mask);
-        Self {
+        getrandom::getrandom(&mut mask).map_err(|_| crate::VeilError::Entropy)?;
+        Ok(Self {
             inner: Shake256::default(),
             mask,
-        }
+        })
     }
 
     /// Create with a caller-supplied mask (for `no_std` or deterministic use).
@@ -81,12 +84,23 @@ impl CtShake256 {
     /// To recover the correct output, use `ct_finalize` which accounts
     /// for the masking.
     pub fn ct_update(&mut self, data: &[u8]) {
+        // Generate a mask stream as long as the data from the base mask.
+        // This avoids the weakness of cycling a 32-byte mask over long inputs.
+        let mut mask_stream = vec![0u8; data.len()];
+        let mut mask_xof = Shake256::default();
+        mask_xof.update(b"veil7:ct:mask-stream");
+        mask_xof.update(&self.mask);
+        mask_xof.update(&(data.len() as u64).to_le_bytes());
+        let mut reader = mask_xof.finalize_xof();
+        reader.read(&mut mask_stream);
+
         let mut masked = data.to_vec();
         for (i, b) in masked.iter_mut().enumerate() {
-            *b ^= self.mask[i % 32];
+            *b ^= mask_stream[i];
         }
         self.inner.update(&masked);
         zeroize_bytes(&mut masked);
+        zeroize_bytes(&mut mask_stream);
     }
 
     /// Absorb data WITHOUT masking (for public / non-secret data).
@@ -130,7 +144,10 @@ impl CtShake256 {
 
 impl Default for CtShake256 {
     fn default() -> Self {
-        Self::with_mask([0u8; 32])
+        // Use a fixed non-zero mask constant. Default cannot call getrandom,
+        // so we use a well-known non-zero pattern to ensure the mask is never
+        // all-zeros (which would make masking a no-op).
+        Self::with_mask([0xA5; 32])
     }
 }
 
@@ -147,7 +164,13 @@ impl Drop for CtShake256 {
 /// output does not need to match standard SHAKE256 exactly.
 #[cfg(feature = "std")]
 pub fn ct_shake256(data: &[u8], out: &mut [u8]) {
-    let mut hasher = CtShake256::new();
+    let mut hasher = match CtShake256::new() {
+        Ok(h) => h,
+        Err(_) => {
+            // Fallback: use a non-zero fixed mask if CSPRNG fails.
+            CtShake256::with_mask([0xA5; 32])
+        }
+    };
     hasher.ct_update(data);
     hasher.ct_finalize(out);
 }

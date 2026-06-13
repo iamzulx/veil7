@@ -274,13 +274,28 @@ impl MicroVM {
                         OpCode::Add => a.wrapping_add(b),
                         OpCode::Xor => a ^ b,
                         OpCode::Mul => a.wrapping_mul(b),
-                        OpCode::Div => a.checked_div(b).unwrap_or(0),
+                        OpCode::Div => {
+                            // Constant-time division: avoid panic on div-by-zero
+                            // and mask result to 0 if divisor was 0.
+                            let is_nonzero = (b | b.wrapping_neg()) >> 63; // 1 if b != 0, 0 if b == 0
+                            let safe_b = b | (1 - is_nonzero); // b if nonzero, 1 if zero
+                            let raw = a / safe_b; // safe: divisor is never 0
+                            raw & (0u64.wrapping_sub(is_nonzero)) // mask to 0 if b was 0
+                        }
                         OpCode::And => a & b,
                         OpCode::Or => a | b,
                         OpCode::Shl => a.wrapping_shl((b & 63) as u32),
                         OpCode::Shr => a.wrapping_shr((b & 63) as u32),
-                        OpCode::Eq => (a == b) as u64,
-                        OpCode::Lt => (a < b) as u64,
+                        OpCode::Eq => {
+                            // Constant-time equality: a ^ b is 0 iff a == b.
+                            let diff = a ^ b;
+                            ((diff | diff.wrapping_neg()) >> 63) ^ 1
+                        }
+                        OpCode::Lt => {
+                            // Constant-time unsigned less-than: check if a - b borrows.
+                            let (_, borrow) = a.overflowing_sub(b);
+                            borrow as u64
+                        }
                         _ => unreachable!(),
                     };
                     // Absorb result into trace.

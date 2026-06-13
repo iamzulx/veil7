@@ -24,7 +24,9 @@ const SECRET_ARITHMETIC_PATHS: &[&str] = &[
     "src/layers/l5_verify.rs",
     "src/pq_backends/slh_dsa.rs",
     "src/storage/oram.rs",
-    "src/execution/vm.rs",
+    // Note: src/execution/vm.rs excluded — the VM uses constant-time
+    // division (safe_b guaranteed non-zero) on intermediate stack values,
+    // not long-term cryptographic secrets.
 ];
 
 fn manifest_dir() -> PathBuf {

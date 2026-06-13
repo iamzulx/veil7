@@ -59,9 +59,9 @@ pub struct BlindFactor {
 
 impl BlindFactor {
     /// Generate a fresh random blinding factor.
-    pub fn fresh() -> Self {
+    pub fn fresh() -> Result<Self, crate::VeilError> {
         let mut nonce = [0u8; 32];
-        let _ = getrandom::getrandom(&mut nonce);
+        getrandom::getrandom(&mut nonce).map_err(|_| crate::VeilError::Entropy)?;
 
         let mut xof = Shake256::default();
         xof.update(BLIND_MASK);
@@ -70,7 +70,7 @@ impl BlindFactor {
         let mut reader = xof.finalize_xof();
         reader.read(&mut mask);
 
-        Self { nonce, mask }
+        Ok(Self { nonce, mask })
     }
 
     /// Reconstruct from stored nonce (e.g. for two-phase protocols).
@@ -141,7 +141,7 @@ pub fn unblind_transcript(transcript: &[u8; 32], factor: &BlindFactor) -> [u8; 3
 ///
 /// Returns `(Verdict, unblinded_transcript)`.
 pub fn blind_attest(claim: &[u8]) -> Result<(Verdict, [u8; 32]), VeilError> {
-    let factor = BlindFactor::fresh();
+    let factor = BlindFactor::fresh()?;
     let blinded = blind_claim(claim, &factor);
     let verdict = verify_once(&Claim::new(&blinded))?;
     let unblinded = unblind_transcript(verdict.transcript(), &factor);
@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn blinded_claim_differs_from_original() {
         let claim = b"plaintext-data";
-        let factor = BlindFactor::fresh();
+        let factor = BlindFactor::fresh().unwrap();
         let blinded = blind_claim(claim, &factor);
         assert_ne!(
             &blinded[..],
@@ -204,7 +204,7 @@ mod tests {
     #[test]
     fn double_blind_recovers_original() {
         let claim = b"round-trip-test";
-        let factor = BlindFactor::fresh();
+        let factor = BlindFactor::fresh().unwrap();
         let blinded = blind_claim(claim, &factor);
         let unblinded = blind_claim(&blinded, &factor); // XOR again = original
         assert_eq!(&unblinded[..], &claim[..]);
@@ -213,7 +213,7 @@ mod tests {
     #[test]
     fn unblinded_transcript_differs_from_raw() {
         let claim = b"test";
-        let factor = BlindFactor::fresh();
+        let factor = BlindFactor::fresh().unwrap();
         let blinded = blind_claim(claim, &factor);
         let verdict = verify_once(&Claim::new(&blinded)).unwrap();
         let unblinded = unblind_transcript(verdict.transcript(), &factor);

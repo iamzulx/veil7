@@ -33,37 +33,44 @@ use crate::l0_memlock::zeroize_bytes;
 /// Irreducible polynomial for GF(2^8): x^8 + x^4 + x^3 + x + 1.
 const POLY: u16 = 0x11B;
 
-/// Multiply two elements in GF(2^8).
+/// Multiply two elements in GF(2^8) in constant time.
+///
+/// Uses the "Russian peasant" algorithm with no secret-dependent branches
+/// or loop bounds. All 8 bits of `b` are processed unconditionally.
 fn gf_mul(a: u8, b: u8) -> u8 {
     let mut result: u16 = 0;
     let mut a = a as u16;
-    let mut b = b as u16;
-    while b > 0 {
-        if b & 1 != 0 {
-            result ^= a;
-        }
-        a <<= 1;
-        if a & 0x100 != 0 {
-            a ^= POLY;
-        }
-        b >>= 1;
+    let b = b as u16;
+    for i in 0..8 {
+        // Constant-time conditional XOR: mask = 0xFFFF if bit set, 0 otherwise
+        let mask = 0u16.wrapping_sub((b >> i) & 1);
+        result ^= a & mask;
+        // Constant-time reduction: check high bit before shift, conditionally XOR polynomial
+        let hi_bit = (a >> 7) & 1;
+        let reduce_mask = 0u16.wrapping_sub(hi_bit);
+        a = (a << 1) ^ (POLY & reduce_mask);
     }
     result as u8
 }
 
-/// Compute the multiplicative inverse in GF(2^8) using Fermat's little
-/// theorem: a^(-1) = a^(254) in GF(2^8).
+/// Compute the multiplicative inverse in GF(2^8) in constant time.
+///
+/// Uses Fermat's little theorem: a^(-1) = a^254 in GF(2^8).
+/// Exponent 254 = 0b11111110. Constant-time square-and-multiply with
+/// all 8 iterations executed regardless of input. Returns 0 for a=0
+/// (which has no inverse; the caller checks for this).
 fn gf_inv(a: u8) -> u8 {
-    if a == 0 {
-        return 0; // 0 has no inverse; we handle this in Lagrange.
+    let mut acc: u8 = 1;
+    let mut base = a;
+    for i in 0..8u8 {
+        let bit = (254u8 >> i) & 1;
+        // Constant-time conditional multiply: acc = bit ? gf_mul(acc, base) : acc
+        let product = gf_mul(acc, base);
+        let mask = 0u8.wrapping_sub(bit);
+        acc = (acc & !mask) | (product & mask);
+        base = gf_mul(base, base);
     }
-    let mut result = a;
-    for _ in 0..6 {
-        result = gf_mul(result, result);
-        result = gf_mul(result, a);
-    }
-    result = gf_mul(result, result);
-    result
+    acc
 }
 
 /// Evaluate a polynomial at point x in GF(2^8).
@@ -113,7 +120,7 @@ pub fn split(secret: &[u8; 64], n: u8, t: u8) -> Option<Vec<Share>> {
     }
 
     let mut rng_bytes = [0u8; 64 * 32]; // enough random coefficients
-    let _ = getrandom::getrandom(&mut rng_bytes);
+    getrandom::getrandom(&mut rng_bytes).ok()?;
 
     let mut shares: Vec<Share> = (1..=n)
         .map(|i| Share {

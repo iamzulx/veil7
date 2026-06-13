@@ -237,6 +237,7 @@ impl Drop for ObliviousRAM {
 fn oram_hash(input: &[u8]) -> [u8; 64] {
     let mut out = [0u8; 64];
     let mut xof = Shake256::default();
+    xof.update(b"veil7:oram:hash:v1");
     xof.update(input);
     let mut reader = xof.finalize_xof();
     reader.read(&mut out);

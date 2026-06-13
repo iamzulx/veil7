@@ -20,6 +20,7 @@
 
 #![cfg(feature = "std")]
 
+use crate::l0_memlock::zeroize_bytes;
 use crate::l7_emit::Verdict;
 use crate::pipeline::{verify_once, Claim};
 use crate::VeilError;
@@ -64,7 +65,7 @@ pub fn threshold_verify(claim: &Claim<'_>, n: usize, m: usize) -> Result<Verdict
         return Err(VeilError::Crypto);
     }
 
-    let mut valid_count: usize = 0;
+    let mut valid_choices: Vec<subtle::Choice> = Vec::with_capacity(m);
     let mut xof = Shake256::default();
     xof.update(THRESHOLD_HEAD);
     xof.update(&(n as u64).to_le_bytes());
@@ -73,9 +74,8 @@ pub fn threshold_verify(claim: &Claim<'_>, n: usize, m: usize) -> Result<Verdict
     for i in 0..m {
         let verdict = verify_once(claim)?;
 
-        // Constant-time: don't branch on validity.
-        let is_valid = verdict.is_valid_bool() as usize;
-        valid_count += is_valid;
+        // Constant-time: accumulate Choice without branching on validity.
+        valid_choices.push(verdict.is_valid());
 
         // Fold transcript into aggregator.
         xof.update(THRESHOLD_STEP);
@@ -83,10 +83,18 @@ pub fn threshold_verify(claim: &Claim<'_>, n: usize, m: usize) -> Result<Verdict
         xof.update(verdict.transcript());
     }
 
-    // Threshold check: constant-time comparison.
+    // Count valid choices without branching on individual verdicts.
+    let mut count: u32 = 0;
+    for c in &valid_choices {
+        count += c.unwrap_u8() as u32;
+    }
     compiler_fence(Ordering::SeqCst);
-    let passed = Choice::from((valid_count >= n) as u8);
+    let passed = Choice::from((count >= n as u32) as u8);
     compiler_fence(Ordering::SeqCst);
+
+    // Wipe the count variable after use.
+    let mut count_bytes = count.to_le_bytes();
+    zeroize_bytes(&mut count_bytes);
 
     // Derive aggregated transcript.
     let mut transcript = [0u8; 32];

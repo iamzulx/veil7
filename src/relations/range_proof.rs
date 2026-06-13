@@ -55,8 +55,20 @@ pub struct Witness {
 impl Drop for Witness {
     #[inline(never)]
     fn drop(&mut self) {
-        // Can't zeroize u64 directly via zeroize_bytes, but the struct
-        // will be dropped. The value is a public-range parameter anyway.
+        // Zeroize secret u64 fields via byte-level volatile writes
+        // (crate-level #![deny(unsafe_code)] prevents direct write_volatile
+        // on u64; convert to bytes, wipe, then overwrite the field).
+        let mut v_bytes = self.value.to_le_bytes();
+        let mut min_bytes = self.min.to_le_bytes();
+        let mut max_bytes = self.max.to_le_bytes();
+        zeroize_bytes(&mut v_bytes);
+        zeroize_bytes(&mut min_bytes);
+        zeroize_bytes(&mut max_bytes);
+        // Overwrite fields with zeros so any post-drop read sees 0.
+        self.value = 0;
+        self.min = 0;
+        self.max = 0;
+        compiler_fence(Ordering::SeqCst);
     }
 }
 
@@ -69,6 +81,9 @@ pub struct Proof {
 impl Drop for Proof {
     #[inline(never)]
     fn drop(&mut self) {
+        for bit in self.bits.iter_mut() {
+            *bit = 0;
+        }
         for nonce in self.nonces.iter_mut() {
             zeroize_bytes(nonce);
         }
@@ -108,7 +123,7 @@ impl Relation for RangeProof {
         };
         let num_bits = num_bits.min(MAX_BITS);
 
-        let offset = witness.value.saturating_sub(witness.min);
+        let offset = witness.value.wrapping_sub(witness.min);
         let mut commitments = Vec::with_capacity(num_bits);
 
         for i in 0..num_bits {
@@ -147,14 +162,12 @@ impl Relation for RangeProof {
     }
 
     fn prove(witness: &Witness, _entropy: &[u8]) -> Result<(Statement, Proof), VeilError> {
-        // Validate range.
-        if witness.value < witness.min || witness.value > witness.max {
-            return Err(VeilError::Crypto);
-        }
-
+        // No early return on secret value — always generate a full proof
+        // regardless of whether value is in range. This prevents timing
+        // side channels that would leak the range membership of the secret.
         let stmt = Self::statement_from_witness(witness);
         let num_bits = stmt.commitments.len();
-        let offset = witness.value.saturating_sub(witness.min);
+        let offset = witness.value.wrapping_sub(witness.min);
 
         let mut bits = Vec::with_capacity(num_bits);
         let mut nonces = Vec::with_capacity(num_bits);
@@ -172,6 +185,18 @@ impl Relation for RangeProof {
             let mut reader = xof.finalize_xof();
             reader.read(&mut nonce);
             nonces.push(nonce);
+        }
+
+        // Constant-time invalidation for out-of-range values:
+        // Compute a mask that is 0x00 if value ∈ [min,max], 0xFF otherwise.
+        // XOR the first nonce byte with this mask to guarantee verification
+        // failure without branching on the secret value.
+        let in_range_lo = (witness.value >= witness.min) as u8;
+        let in_range_hi = (witness.value <= witness.max) as u8;
+        let in_range = in_range_lo & in_range_hi;
+        let corrupt = in_range.wrapping_sub(1); // 0 if in-range, 0xFF if out
+        if let Some(first_nonce) = nonces.first_mut() {
+            first_nonce[0] ^= corrupt;
         }
 
         Ok((stmt, Proof { bits, nonces }))
@@ -252,23 +277,33 @@ mod tests {
     }
 
     #[test]
-    fn value_below_min_rejected() {
+    fn value_below_min_fails_verification() {
+        // C1 fix: prove() no longer branches on secret value.
+        // wrapping_sub produces a large offset for below-min values,
+        // so the reconstructed value will be out of range.
         let w = Witness {
             value: 50,
             min: 100,
             max: 200,
         };
-        assert!(RangeProof::prove(&w, &[]).is_err());
+        let (stmt, proof) = RangeProof::prove(&w, &[]).unwrap();
+        let ok = RangeProof::verify(&stmt, &proof).unwrap();
+        assert_eq!(ok.unwrap_u8(), 0, "below-min value must fail verification");
     }
 
     #[test]
-    fn value_above_max_rejected() {
+    fn value_above_max_fails_verification() {
+        // C1 fix: prove() no longer branches on secret value.
+        // For value > max the clamped offset diverges from the
+        // statement's offset, so commitment checks will reject.
         let w = Witness {
             value: 250,
             min: 100,
             max: 200,
         };
-        assert!(RangeProof::prove(&w, &[]).is_err());
+        let (stmt, proof) = RangeProof::prove(&w, &[]).unwrap();
+        let ok = RangeProof::verify(&stmt, &proof).unwrap();
+        assert_eq!(ok.unwrap_u8(), 0, "above-max value must fail verification");
     }
 
     #[test]

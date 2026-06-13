@@ -73,10 +73,10 @@ struct Nonce {
 }
 
 impl Nonce {
-    fn fresh() -> Self {
+    fn fresh() -> Result<Self, crate::VeilError> {
         let mut bytes = [0u8; 32];
-        let _ = getrandom::getrandom(&mut bytes);
-        Self { bytes }
+        getrandom::getrandom(&mut bytes).map_err(|_| crate::VeilError::Entropy)?;
+        Ok(Self { bytes })
     }
 }
 
@@ -95,7 +95,7 @@ impl Drop for Nonce {
 /// The engine does not retain any state from this call. The token is the
 /// only artifact; the caller is responsible for holding it.
 pub fn commit(claim: &[u8]) -> Result<CommitmentToken, VeilError> {
-    let nonce = Nonce::fresh();
+    let nonce = Nonce::fresh()?;
 
     let mut xof = Shake256::default();
     xof.update(CR_COMMIT);
@@ -116,7 +116,7 @@ pub fn commit(claim: &[u8]) -> Result<CommitmentToken, VeilError> {
 /// The engine wipes all internal state before returning.
 pub fn commit_phase(claim: &[u8]) -> Result<(CommitmentToken, [u8; 32]), VeilError> {
     let mut nonce_bytes = [0u8; 32];
-    let _ = getrandom::getrandom(&mut nonce_bytes);
+    getrandom::getrandom(&mut nonce_bytes).map_err(|_| VeilError::Entropy)?;
 
     let mut xof = Shake256::default();
     xof.update(CR_COMMIT);

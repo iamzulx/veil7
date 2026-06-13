@@ -281,15 +281,25 @@ fn pedersen_tampered_statement_fails() {
 // ────────────────────────────────────────────────────────────────────────────
 
 #[test]
-fn range_proof_out_of_range_rejected_at_prove() {
+fn range_proof_out_of_range_produces_invalid_proof() {
     let w = RangeWitness {
         value: 999,
         min: 0,
         max: 100,
     };
+    // prove() no longer returns Err (constant-time fix: no early return on secret).
+    // Instead, the generated proof should fail verification.
+    let result = RangeProof::prove(&w, &[]);
     assert!(
-        RangeProof::prove(&w, &[]).is_err(),
-        "value above max must be rejected at prove"
+        result.is_ok(),
+        "prove must succeed regardless of range (constant-time)"
+    );
+    let (stmt, proof) = result.unwrap();
+    let ok = RangeProof::verify(&stmt, &proof).expect("no panic");
+    assert_eq!(
+        ok.unwrap_u8(),
+        0,
+        "out-of-range proof must fail verification"
     );
 }
 

@@ -104,7 +104,7 @@ fn blind_attest_produces_valid_verdict() {
 #[test]
 fn blind_claim_is_uniformly_random_looking() {
     let claim = b"plaintext-data-that-should-be-hidden";
-    let factor = veil7::blind::BlindFactor::fresh();
+    let factor = veil7::blind::BlindFactor::fresh().unwrap();
     let blinded = veil7::blind::blind_claim(claim, &factor);
     // Blinded data should differ from original.
     assert_ne!(&blinded[..], &claim[..]);
@@ -115,7 +115,7 @@ fn blind_claim_is_uniformly_random_looking() {
 #[test]
 fn blind_double_xor_recovers_original() {
     let claim = b"round-trip-blind";
-    let factor = veil7::blind::BlindFactor::fresh();
+    let factor = veil7::blind::BlindFactor::fresh().unwrap();
     let blinded = veil7::blind::blind_claim(claim, &factor);
     let recovered = veil7::blind::blind_claim(&blinded, &factor);
     assert_eq!(
@@ -138,7 +138,7 @@ fn blind_different_factors_different_blinds() {
 #[test]
 fn blind_unblinded_transcript_differs_from_engine_transcript() {
     let claim = b"test-data";
-    let factor = veil7::blind::BlindFactor::fresh();
+    let factor = veil7::blind::BlindFactor::fresh().unwrap();
     let blinded = veil7::blind::blind_claim(claim, &factor);
     let v = veil7::verify_once(&Claim::new(&blinded)).unwrap();
     let unblinded = veil7::blind::unblind_transcript(v.transcript(), &factor);
@@ -279,19 +279,31 @@ fn range_proof_out_of_range_rejected() {
     use veil7::relations::range_proof::{RangeProof, Witness};
     use veil7::relations::Relation;
 
+    // prove() no longer returns Err (constant-time: no early return on secret).
+    // Out-of-range proofs are generated but fail verification.
     let w_below = Witness {
         value: 50,
         min: 100,
         max: 200,
     };
-    assert!(RangeProof::prove(&w_below, &[]).is_err());
+    let (s, p) = RangeProof::prove(&w_below, &[]).unwrap();
+    assert_eq!(
+        RangeProof::verify(&s, &p).unwrap().unwrap_u8(),
+        0,
+        "below-min proof must fail verification"
+    );
 
     let w_above = Witness {
         value: 250,
         min: 100,
         max: 200,
     };
-    assert!(RangeProof::prove(&w_above, &[]).is_err());
+    let (s2, p2) = RangeProof::prove(&w_above, &[]).unwrap();
+    assert_eq!(
+        RangeProof::verify(&s2, &p2).unwrap().unwrap_u8(),
+        0,
+        "above-max proof must fail verification"
+    );
 }
 
 #[test]
