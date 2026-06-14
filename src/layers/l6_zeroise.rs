@@ -67,6 +67,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // calls derive_keys → libcrux cpuid (unsupported by Miri)
     fn scrub_consumes_keys() {
         use crate::l1_entropy::harvest;
         use crate::l2_keygen::derive_keys;
@@ -77,6 +78,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // calls derive_keys → libcrux cpuid (unsupported by Miri)
     fn scrub_runs_drop_inline_never() {
         // The `#[inline(never)]` attribute on `scrub` is the
         // compile-time contract that prevents the optimizer from
