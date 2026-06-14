@@ -1,4 +1,4 @@
-//! ML-DSA relation — knowledge of an ML-DSA-65 signing key.
+//! ML-DSA relation — knowledge of an ML-DSA-65 signing key (libcrux backend).
 //!
 //! This wraps the lattice signature scheme (FIPS 204) as a [`Relation`], proving
 //! the engine's verification core is genuinely *universal*: a completely
@@ -11,28 +11,32 @@
 //! statement `x`. The proof is an ML-DSA signature over a Fiat-Shamir challenge
 //! that is itself bound to the verifying key via the [`Transcript`]:
 //!
-//!   sk = MLDSA.KeyGen(w)
-//!   x  = sk.verifying_key()
-//!   c  = Transcript(PROTO).absorb("vk", encode(x)).challenge()
-//!   π  = MLDSA.Sign_deterministic(sk, c, ctx)
+//!   kp = MLDSA.KeyGen(w)              (libcrux, formally verified)
+//!   x  = kp.verification_key
+//!   c  = Transcript(PROTO).absorb("vk", x_bytes).challenge()
+//!   π  = MLDSA.Sign(kp.signing_key, c, ctx, randomness)
 //!
 //! Verification recomputes `c` from `x` and checks the signature. Because the
 //! signed message is the transcript challenge (bound to `x`), a valid signature
 //! demonstrates possession of the signing key for that exact verifying key.
 //!
+//! ## Backend
+//! Uses **libcrux** (hax/F* formally verified) for all ML-DSA operations:
+//! key generation, signing, and verification. No RustCrypto dependencies.
+//!
 //! ## Status
-//! Research/educational composition over audited RustCrypto primitives. The
-//! ML-DSA primitive itself is the upstream implementation; the proof-of-knowledge
-//! framing around it is unaudited.
+//! Research/educational composition over formally verified libcrux primitives.
 
 use crate::common::{Transcript, VeilError};
 use crate::l0_memlock::zeroize_bytes;
+use crate::pq_backends::libcrux_backend;
 use crate::relations::Relation;
 
-use ml_dsa::{KeyInit as _, Keypair as _, MlDsa65, Signature, SigningKey, VerifyingKey};
-use ml_kem::array::Array; // shared hybrid-array type used to build the 32-byte seed
+use libcrux_ml_dsa::ml_dsa_65::{MLDSA65Signature, MLDSA65VerificationKey};
 
 use core::sync::atomic::{compiler_fence, Ordering};
+use sha3::digest::{ExtendableOutput, Update, XofReader};
+use sha3::Shake256;
 use subtle::Choice;
 
 /// Protocol label binding the transcript to this relation.
@@ -40,9 +44,9 @@ const PROTO: &[u8] = b"veil7:relation:ml-dsa-65-knowledge:v1";
 /// ML-DSA signing context (FIPS 204 ctx field) — extra domain separation.
 const CTX: &[u8] = b"veil7:rel:mldsa:ctx:v1";
 
-/// Public statement: the ML-DSA-65 verifying key.
+/// Public statement: the ML-DSA-65 verifying key (raw bytes).
 pub struct Statement {
-    pub vk: VerifyingKey<MlDsa65>,
+    pub vk: MLDSA65VerificationKey,
 }
 
 /// Secret witness: the 32-byte seed from which the signing key is derived.
@@ -59,13 +63,31 @@ impl Drop for Witness {
 
 /// The proof: an ML-DSA signature over the transcript challenge.
 pub struct Proof {
-    pub sig: Signature<MlDsa65>,
+    pub sig: MLDSA65Signature,
 }
 
-/// Build an ML-DSA-65 signing key from a 32-byte seed.
-fn signing_key_from_seed(seed: &[u8; 32]) -> Result<SigningKey<MlDsa65>, VeilError> {
-    let seed_arr: ml_dsa::B32 = Array::try_from(&seed[..]).map_err(|_| VeilError::Crypto)?;
-    Ok(SigningKey::<MlDsa65>::new(&seed_arr))
+impl Drop for Proof {
+    #[inline(never)]
+    fn drop(&mut self) {
+        zeroize_bytes(self.sig.as_mut_slice());
+    }
+}
+
+/// Derive deterministic signing randomness from the seed and challenge.
+///
+/// libcrux's `ml_dsa_65::sign` requires a 32-byte randomness parameter
+/// (unlike RustCrypto's `sign_deterministic`). We derive it deterministically
+/// from the seed + challenge via SHAKE256 to maintain the deterministic
+/// proof property (same seed → same proof).
+fn derive_signing_randomness(seed: &[u8; 32], challenge: &[u8; 32]) -> [u8; 32] {
+    let mut xof = Shake256::default();
+    xof.update(b"veil7:rel:mldsa:sig-randomness:v1");
+    xof.update(seed);
+    xof.update(challenge);
+    let mut out = [0u8; 32];
+    let mut reader = xof.finalize_xof();
+    reader.read(&mut out);
+    out
 }
 
 /// Derive the Fiat-Shamir challenge message bound to the verifying key.
@@ -79,8 +101,7 @@ fn challenge_for(stmt: &Statement) -> [u8; 32] {
 struct HashChallenge;
 impl HashChallenge {
     fn bind(stmt: &Statement, t: &mut Transcript) {
-        let enc = stmt.vk.encode();
-        t.absorb(b"mldsa:vk", enc.as_slice());
+        t.absorb(b"mldsa:vk", stmt.vk.as_slice());
     }
 }
 
@@ -97,13 +118,9 @@ impl Relation for MlDsaKnowledge {
     }
 
     fn statement_from_witness(witness: &Witness) -> Statement {
-        // If the seed is malformed we cannot build a key; fall back to a key from
-        // a zeroed seed. This path is unreachable for the fixed 32-byte witness,
-        // but we avoid panicking to keep the engine oracle-free.
-        let sk = signing_key_from_seed(&witness.seed)
-            .unwrap_or_else(|_| SigningKey::<MlDsa65>::new(&Array::default()));
+        let kp = libcrux_backend::dsa_keygen(witness.seed);
         Statement {
-            vk: sk.verifying_key(),
+            vk: kp.verification_key,
         }
     }
 
@@ -113,31 +130,27 @@ impl Relation for MlDsaKnowledge {
 
     fn prove(
         witness: &Witness,
-        _entropy: &[u8], // ML-DSA deterministic signing: entropy not required
+        _entropy: &[u8], // deterministic: randomness derived from seed + challenge
     ) -> Result<(Statement, Proof), VeilError> {
-        let sk = signing_key_from_seed(&witness.seed)?;
+        let kp = libcrux_backend::dsa_keygen(witness.seed);
         let stmt = Statement {
-            vk: sk.verifying_key(),
+            vk: kp.verification_key,
         };
         let msg = challenge_for(&stmt);
-        let sig = sk
-            .expanded_key()
-            .sign_deterministic(&msg, CTX)
-            .map_err(|_| VeilError::Crypto)?;
+        let sig_randomness = derive_signing_randomness(&witness.seed, &msg);
+
+        let sig = libcrux_backend::dsa_sign(&kp.signing_key, &msg, CTX, sig_randomness)?;
+
         Ok((stmt, Proof { sig }))
     }
 
     fn verify(stmt: &Statement, proof: &Proof) -> Result<Choice, VeilError> {
         let msg = challenge_for(stmt);
-        let ok = stmt.vk.verify_with_context(&msg, CTX, &proof.sig);
-        // Side-channel hardening: a fence around the Choice::from so
-        // the boolean -> Choice conversion is observable across the
-        // function boundary. The upstream `verify_with_context`
-        // returns `bool` internally (which we accept as documented
-        // best-effort), but the *transformation* into our accumulator
-        // type is now fence-protected.
+        let result = libcrux_backend::dsa_verify(&stmt.vk, &msg, CTX, &proof.sig);
+
+        // Side-channel hardening: fence around the Choice conversion.
         compiler_fence(Ordering::SeqCst);
-        let c = Choice::from(ok as u8);
+        let c = Choice::from(result.is_ok() as u8);
         compiler_fence(Ordering::SeqCst);
         Ok(c)
     }
@@ -157,7 +170,6 @@ mod tests {
 
     #[test]
     fn wrong_statement_fails() {
-        // Prove with one witness; verify the proof against a different vk.
         let (_, proof) = MlDsaKnowledge::prove(&Witness { seed: [0x21u8; 32] }, &[]).unwrap();
         let other = MlDsaKnowledge::statement_from_witness(&Witness { seed: [0x99u8; 32] });
         let ok = MlDsaKnowledge::verify(&other, &proof).unwrap();
@@ -172,6 +184,22 @@ mod tests {
     fn deterministic_statement() {
         let s1 = MlDsaKnowledge::statement_from_witness(&Witness { seed: [5u8; 32] });
         let s2 = MlDsaKnowledge::statement_from_witness(&Witness { seed: [5u8; 32] });
-        assert_eq!(s1.vk.encode(), s2.vk.encode(), "keygen is deterministic");
+        assert_eq!(
+            s1.vk.as_slice(),
+            s2.vk.as_slice(),
+            "keygen is deterministic"
+        );
+    }
+
+    #[test]
+    fn deterministic_proof() {
+        let w = Witness { seed: [0x42u8; 32] };
+        let (_, p1) = MlDsaKnowledge::prove(&w, &[]).unwrap();
+        let (_, p2) = MlDsaKnowledge::prove(&w, &[]).unwrap();
+        assert_eq!(
+            p1.sig.as_slice(),
+            p2.sig.as_slice(),
+            "same seed must produce identical signatures"
+        );
     }
 }

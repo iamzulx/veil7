@@ -160,13 +160,14 @@ fn merkle_out_of_range_index_fails() {
 fn ml_dsa_tampered_signature_fails() {
     let w = MlDsaWitness { seed: [0x77u8; 32] };
     let (stmt, mut proof) = MlDsaKnowledge::prove(&w, &[]).unwrap();
-    let mut enc = ml_dsa::Signature::<ml_dsa::MlDsa65>::encode(&proof.sig);
-    enc[0] ^= 0xFF;
-    if let Some(bad) = ml_dsa::Signature::<ml_dsa::MlDsa65>::decode(&enc) {
-        proof.sig = bad;
-        let ok = MlDsaKnowledge::verify(&stmt, &proof).expect("no panic");
-        assert_eq!(ok.unwrap_u8(), 0, "tampered ML-DSA signature must fail");
-    }
+    // Tamper with the signature bytes using libcrux types.
+    let sig_bytes = proof.sig.as_slice();
+    let mut tampered = [0u8; 3309];
+    tampered.copy_from_slice(sig_bytes);
+    tampered[0] ^= 0xFF;
+    proof.sig = libcrux_ml_dsa::ml_dsa_65::MLDSA65Signature::new(tampered);
+    let ok = MlDsaKnowledge::verify(&stmt, &proof).expect("no panic");
+    assert_eq!(ok.unwrap_u8(), 0, "tampered ML-DSA signature must fail");
 }
 
 #[test]
