@@ -249,6 +249,31 @@ fn main() {
                 None => println!("valid=0 transcript=-"),
             }
         }
+        "chain-entry" => {
+            // chain-entry <event> [prev_transcript_hex]
+            let event = args_os
+                .get(2)
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let prev_hex = args_os
+                .get(3)
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let prev = if prev_hex.is_empty() {
+                None
+            } else {
+                parse_hex_root(&prev_hex)
+            };
+            let prev_ref = prev.as_ref();
+            match veil7::interface::attest_chain_entry(event.as_bytes(), prev_ref) {
+                Ok(v) => {
+                    let valid = v.is_valid_bool() as u8;
+                    let tx = hex(v.transcript());
+                    println!("valid={} transcript={}", valid, tx);
+                }
+                Err(_) => println!("valid=0 transcript=-"),
+            }
+        }
         "help" => print_help(),
         _ => print_help(),
     }
@@ -490,7 +515,9 @@ fn print_help() {
     eprintln!("sign <text> | sign-file <path> | sign-stream <path>");
     eprintln!("blind-sign <text> | hybrid-sign <text>");
     eprintln!("batch-sign <t1> <t2>.. | threshold <n> <m> <text>");
-    eprintln!("chain <ev>.. | chain-root <ev>.. | verify <hex> <ev>..");
+    eprintln!(
+        "chain <ev>.. | chain-root <ev>.. | chain-entry <ev> [prev_hex] | verify <hex> <ev>.."
+    );
     eprintln!("vm-execute <hex>");
     eprintln!(
         "prove hash-preimage | ml-dsa | pedersen | range-proof | merkle-root | merkle-include"

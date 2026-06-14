@@ -435,6 +435,93 @@ pub fn check_merkle(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Range Proof (one-call wrapper)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Prove that `value` is within `[min, max]` without revealing `value`.
+///
+/// Uses bit-decomposition + SHAKE256 commitments. The proof reveals bits
+/// and nonces within the engine; only the `Verdict` is emitted.
+///
+/// Returns `Ok(Verdict)` with `valid=1` if `min ≤ value ≤ max`,
+/// `valid=0` if out of range. Returns `Err` on invalid parameters.
+pub fn prove_range(value: u64, min: u64, max: u64) -> Result<Verdict, VeilError> {
+    if min > max {
+        return Err(VeilError::Crypto);
+    }
+    let witness = crate::relations::range_proof::Witness { value, min, max };
+    prove_and_verify::<crate::relations::range_proof::RangeProof>(&witness, b"")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Threshold Attestation (N-of-M)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Run `m` independent verification iterations on `claim_bytes` and require
+/// at least `n` of them to produce `valid=1`.
+///
+/// Each iteration uses fresh entropy and fresh ephemeral keys (stateless).
+/// The final `Verdict` has `valid=1` if ≥ N iterations passed.
+///
+/// Returns `Err` if `n == 0`, `m == 0`, or `n > m`.
+pub fn threshold_attest(claim_bytes: &[u8], n: usize, m: usize) -> Result<Verdict, VeilError> {
+    crate::threshold::threshold_verify(&Claim::new(claim_bytes), n, m)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Blind Attestation
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Blind a claim with a random mask.
+///
+/// Returns `(blinded_claim, BlindFactor)`. The caller sends `blinded_claim`
+/// to the engine and keeps `factor` for later unblinding.
+pub fn blind_claim(claim: &[u8]) -> Result<(Vec<u8>, crate::blind::BlindFactor), VeilError> {
+    let factor = crate::blind::BlindFactor::fresh()?;
+    let blinded = crate::blind::blind_claim(claim, &factor);
+    Ok((blinded, factor))
+}
+
+/// Attest a blinded claim through the full L1→L7 pipeline.
+///
+/// The engine processes the blinded data without seeing the original claim.
+pub fn attest_blinded(blinded_claim: &[u8]) -> Result<Verdict, VeilError> {
+    verify_once(&Claim::new(blinded_claim))
+}
+
+/// Unblind a verdict transcript using the blinding factor.
+///
+/// Returns the unblinded 32-byte transcript that correlates to the
+/// original claim.
+pub fn unblind_verdict(verdict: &Verdict, factor: &crate::blind::BlindFactor) -> [u8; 32] {
+    crate::blind::unblind_transcript(verdict.transcript(), factor)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Forward-Secrecy Chain
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Attest a single chain entry, optionally chaining to a previous transcript.
+///
+/// If `prev_transcript` is `Some`, the event is chained to the previous
+/// entry's transcript (forward secrecy). If `None`, this is the first entry.
+///
+/// Returns a `Verdict` whose transcript can be used as `prev_transcript`
+/// for the next entry.
+pub fn attest_chain_entry(
+    event: &[u8],
+    prev_transcript: Option<&[u8; 32]>,
+) -> Result<Verdict, VeilError> {
+    // Build chain data: [prev_transcript || event] or just [event]
+    let mut chain_data = Vec::new();
+    if let Some(prev) = prev_transcript {
+        chain_data.extend_from_slice(prev);
+    }
+    chain_data.extend_from_slice(event);
+    verify_once(&Claim::new(&chain_data))
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Tests
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -621,5 +708,91 @@ mod tests {
             &proof.siblings,
             proof.leaf_count
         ));
+    }
+
+    // ── prove_range oracle ────────────────────────────────────────────────
+
+    #[test]
+    fn prove_range_in_range() {
+        let result = prove_range(500, 100, 1000).unwrap();
+        assert!(result.is_valid_bool());
+    }
+
+    #[test]
+    fn prove_range_at_boundary() {
+        let result = prove_range(100, 100, 1000).unwrap();
+        assert!(result.is_valid_bool());
+        let result2 = prove_range(1000, 100, 1000).unwrap();
+        assert!(result2.is_valid_bool());
+    }
+
+    #[test]
+    fn prove_range_out_of_range_fails() {
+        // value > max should produce valid=0 (proof generates but verification fails)
+        let result = prove_range(1001, 100, 1000).unwrap();
+        assert!(!result.is_valid_bool());
+    }
+
+    // ── threshold_attest oracle ─────────────────────────────────────────────
+
+    #[test]
+    fn threshold_attest_3_of_5() {
+        let claim_bytes = b"threshold-test";
+        let result = threshold_attest(claim_bytes, 3, 5).unwrap();
+        assert!(result.is_valid_bool());
+    }
+
+    #[test]
+    fn threshold_attest_1_of_1() {
+        let result = threshold_attest(b"single", 1, 1).unwrap();
+        assert!(result.is_valid_bool());
+    }
+
+    #[test]
+    fn threshold_attest_invalid_params() {
+        assert!(threshold_attest(b"test", 0, 5).is_err()); // n=0
+        assert!(threshold_attest(b"test", 6, 5).is_err()); // n > m
+        assert!(threshold_attest(b"test", 5, 0).is_err()); // m=0
+    }
+
+    // ── blind_attest oracle ─────────────────────────────────────────────────
+
+    #[test]
+    fn blind_attest_roundtrip() {
+        let claim = b"secret-data";
+        let (blinded, factor) = blind_claim(claim).unwrap();
+        let verdict = attest_blinded(&blinded).unwrap();
+        assert!(verdict.is_valid_bool());
+        let unblinded = unblind_verdict(&verdict, &factor);
+        assert_ne!(unblinded, [0u8; 32]);
+    }
+
+    #[test]
+    fn blind_double_blind_recovers_original() {
+        let claim = b"test-data";
+        let factor = crate::blind::BlindFactor::from_nonce([0x42; 32]);
+        let blinded = crate::blind::blind_claim(claim, &factor);
+        let recovered = crate::blind::blind_claim(&blinded, &factor);
+        assert_eq!(&recovered[..], claim);
+    }
+
+    // ── attest_chain_entry oracle ───────────────────────────────────────────
+
+    #[test]
+    fn attest_chain_entry_single() {
+        let result = attest_chain_entry(b"first-event", None).unwrap();
+        assert!(result.is_valid_bool());
+    }
+
+    #[test]
+    fn attest_chain_entry_chained() {
+        let v1 = attest_chain_entry(b"event-1", None).unwrap();
+        let v2 = attest_chain_entry(b"event-2", Some(v1.transcript())).unwrap();
+        assert!(v2.is_valid_bool());
+        let v3 = attest_chain_entry(b"event-3", Some(v2.transcript())).unwrap();
+        assert!(v3.is_valid_bool());
+        // All transcripts should be different
+        assert_ne!(v1.transcript(), v2.transcript());
+        assert_ne!(v2.transcript(), v3.transcript());
     }
 }
