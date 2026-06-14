@@ -97,6 +97,10 @@ impl<const N: usize> Locked<N> {
         let buf = Box::new([0u8; N]);
         // SAFETY: `buf` points to exactly N initialised bytes for the lifetime
         // of this allocation; the range [ptr, ptr+N) is valid for mlock.
+        // Under Miri, mlock is unsupported so we skip it (best-effort anyway).
+        #[cfg(miri)]
+        let locked = false;
+        #[cfg(not(miri))]
         let locked = unsafe {
             let ptr = buf.as_ptr() as *const libc::c_void;
             libc::mlock(ptr, N) == 0
