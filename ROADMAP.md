@@ -89,13 +89,22 @@ The implementation MUST produce identical output.
 
 ### 1.4 — Miri Memory Safety (MEDIUM 🟡)
 
-**Status:** ✅ COMPLETE — Miri added to CI
+**Status:** ✅ COMPLETE — Miri running in CI (13 modules)
 
 ```
 - [x] Add Miri to CI (nightly channel) — rust.yml miri job
 - [x] MIRIFLAGS: -Zmiri-disable-isolation (for getrandom/OS entropy)
-- [ ] Fix Miri findings (pending first CI run)
+- [x] Scope Miri to 13 non-libcrux modules (libcrux uses cpuid inline asm)
+- [x] l0_memlock: #[cfg(miri)] guard to skip mlock syscall
 ```
+
+**Miri coverage:**
+- ✅ Tested: common, chain, shamir, keccak_ct, storage, execution,
+  relations (hash_preimage, pedersen, range_proof, merkle),
+  layers (l0_memlock, l6_zeroise), entropy_sources
+- ⏭️ Skipped: pipeline, blind, hybrid, threshold, commit_reveal,
+  interface, l2-l5, relations::ml_dsa, pq_backends
+  (all depend on libcrux which uses cpuid inline assembly unsupported by Miri)
 
 ### 1.5 — Missing Drop Implementations (MEDIUM 🟡)
 
@@ -278,3 +287,5 @@ The implementation MUST produce identical output.
 | 2026-06-14 | ✅ Phase 1.5: All 11 secret types have Drop impls. |
 | 2026-06-14 | ✅ Phase 1.4: Miri added to CI (nightly). |
 | 2026-06-14 | ✅ Phase 1.3: cargo-vet added to CI. Phase 1 complete. |
+| 2026-06-14 | ✅ Miri: skip mlock under Miri (cfg(miri) guard). |
+| 2026-06-14 | ✅ Miri: scoped to 13 non-libcrux modules (cpuid limitation). |

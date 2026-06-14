@@ -34,6 +34,15 @@
     verify_once 1.17x ratio (acceptable).
   - State leak detection: 20 sequential transcripts all unique.
 
+- **Miri memory safety CI** (`.github/workflows/rust.yml`)
+  - Miri job runs 13 module-specific test suites under nightly Rust.
+  - `-Zmiri-disable-isolation` for getrandom/OS entropy calls.
+  - `l0_memlock`: `#[cfg(miri)]` guard skips `mlock` syscall under Miri.
+  - Scoped to non-libcrux modules (libcrux uses cpuid inline assembly
+    unsupported by Miri): common, chain, shamir, keccak_ct, storage,
+    execution, relations (hash_preimage, pedersen, range_proof, merkle),
+    layers (l0_memlock, l6_zeroise), entropy_sources.
+
 - **Supply chain security infrastructure**
   - `.github/dependabot.yml` — weekly dependency monitoring with ignore rules
     for sha3 and getrandom major versions (conflict with libcrux).
