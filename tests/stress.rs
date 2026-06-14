@@ -308,7 +308,7 @@ fn stress_oram_many_operations() {
 #[test]
 fn stress_cross_module_all() {
     use veil7::execution::vm::{BytecodeBuilder, MicroVM};
-    use veil7::keccak_ct;
+
     use veil7::shamir::{reconstruct, split, Share};
     use veil7::storage::ObliviousRAM;
 

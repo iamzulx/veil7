@@ -122,6 +122,15 @@ pub(crate) fn zeroize_u64(word: &mut u64) {
 ///   * If `locked` is true, the page range is currently `mlock`'d.
 ///   * On drop: zeroise the bytes, then `munlock` (if it was locked).
 ///
+/// ## Platform note (Android/Termux)
+/// On Android/Termux, `mlock()` returns `ENOMEM` (errno 12) even when
+/// `RLIMIT_MEMLOCK` suggests sufficient budget (e.g. 65536 kB). This is a
+/// kernel-level restriction — Android does not allow `mlock` for non-root
+/// processes regardless of rlimit. `Locked` handles this gracefully:
+/// `is_locked()` returns `false` and the buffer still functions correctly
+/// with volatile zeroization on drop. Security is maintained via zeroize;
+/// only swap-protection is degraded.
+///
 /// With `std` feature: uses `libc::mlock`/`munlock` for memory pinning.
 /// Without `std`: provides same API but without memory locking (best-effort).
 pub struct Locked<const N: usize> {

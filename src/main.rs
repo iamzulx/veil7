@@ -6,41 +6,86 @@
 
 use std::env;
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
+/// Maximum file size for sign-file / sign-stream (100 MB).
+const MAX_FILE_SIZE: u64 = 100 * 1024 * 1024;
 
-    if args.len() < 2 {
+/// Blocked path prefixes for sign-file / sign-stream.
+const BLOCKED_PREFIXES: &[&str] = &["/proc/", "/dev/", "/proc", "/dev"];
+
+fn main() {
+    // Install custom panic hook: print only valid=0 then abort.
+    // Prevents leaking source paths, line numbers, or internal state.
+    std::panic::set_hook(Box::new(|_| {
+        eprintln!("valid=0 transcript=-");
+    }));
+
+    // Use args_os() to handle non-UTF8 arguments gracefully.
+    let args_os: Vec<std::ffi::OsString> = env::args_os().collect();
+
+    if args_os.len() < 2 {
         print_help();
         return;
     }
 
-    match args[1].as_str() {
+    let cmd = args_os[1].to_string_lossy().to_string();
+
+    match cmd.as_str() {
         "sign" => {
-            let text = args.get(2).map(|s| s.as_str()).unwrap_or("");
-            match veil7::interface::attest_text(text) {
+            let text = args_os
+                .get(2)
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            match veil7::interface::attest_text(&text) {
                 Ok(v) => print_verdict(&v),
                 Err(_) => println!("valid=0 transcript=-"),
             }
         }
         "sign-file" => {
-            let path = args.get(2).map(|s| s.as_str()).unwrap_or("");
-            match veil7::interface::attest_file(path) {
+            let path = args_os
+                .get(2)
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if is_blocked_path(&path) {
+                println!("valid=0 transcript=-");
+                return;
+            }
+            if is_file_too_large(&path) {
+                println!("valid=0 transcript=-");
+                return;
+            }
+            match veil7::interface::attest_file(&path) {
                 Ok(v) => print_verdict(&v),
                 Err(_) => println!("valid=0 transcript=-"),
             }
         }
         "sign-stream" => {
-            let path = args.get(2).map(|s| s.as_str()).unwrap_or("");
-            match veil7::interface::attest_file_streaming(path) {
+            let path = args_os
+                .get(2)
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if is_blocked_path(&path) {
+                println!("valid=0 transcript=-");
+                return;
+            }
+            if is_file_too_large(&path) {
+                println!("valid=0 transcript=-");
+                return;
+            }
+            match veil7::interface::attest_file_streaming(&path) {
                 Ok(v) => print_verdict(&v),
                 Err(_) => println!("valid=0 transcript=-"),
             }
         }
         "chain" => {
-            // Each remaining argument is one event in the chain.
-            let events: Vec<&[u8]> = args[2..].iter().map(|s| s.as_bytes()).collect();
-            match veil7::interface::attest_chain(&events) {
-                Ok(v) => match veil7::chain_root(&events) {
+            let owned_events: Vec<Vec<u8>> = args_os
+                .get(2..)
+                .unwrap_or(&[])
+                .iter()
+                .map(|s| s.to_string_lossy().as_bytes().to_vec())
+                .collect();
+            let event_refs: Vec<&[u8]> = owned_events.iter().map(|v| v.as_slice()).collect();
+            match veil7::interface::attest_chain(&event_refs) {
+                Ok(v) => match veil7::chain_root(&event_refs) {
                     Ok(root) => println!(
                         "root={} valid={} transcript={}",
                         hex(&root),
@@ -53,53 +98,73 @@ fn main() {
             }
         }
         "chain-root" => {
-            // Pure math: compute chain root, no PQ, no entropy. Symmetric to
-            // `chain` (attest) and `verify` (check). For auditors who want
-            // the root without re-running the full pipeline.
-            let events: Vec<&[u8]> = args[2..].iter().map(|s| s.as_bytes()).collect();
-            match veil7::chain_root(&events) {
+            let owned_events: Vec<Vec<u8>> = args_os
+                .get(2..)
+                .unwrap_or(&[])
+                .iter()
+                .map(|s| s.to_string_lossy().as_bytes().to_vec())
+                .collect();
+            let event_refs: Vec<&[u8]> = owned_events.iter().map(|v| v.as_slice()).collect();
+            match veil7::chain_root(&event_refs) {
                 Ok(root) => println!("root={}", hex(&root)),
                 Err(_) => println!("valid=0 transcript=-"),
             }
         }
         "verify" => {
-            // First arg = expected root as 64 hex chars; rest = events.
-            // No PQ, no entropy — pure SHAKE256 chain framing check.
-            // Universal verification: any holder of the events + the root
-            // can audit without the engine, without keys, without side
-            // effects. Here we use the engine for convenience.
-            let hex_root = args.get(2).map(|s| s.as_str()).unwrap_or("");
-            let events: Vec<&[u8]> = args[3..].iter().map(|s| s.as_bytes()).collect();
-            let expected = match parse_hex_root(hex_root) {
+            let hex_root = args_os
+                .get(2)
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let owned_events: Vec<Vec<u8>> = args_os
+                .get(3..)
+                .unwrap_or(&[])
+                .iter()
+                .map(|s| s.to_string_lossy().as_bytes().to_vec())
+                .collect();
+            let event_refs: Vec<&[u8]> = owned_events.iter().map(|v| v.as_slice()).collect();
+            let expected = match parse_hex_root(&hex_root) {
                 Some(r) => r,
                 None => {
                     println!("valid=0 transcript=-");
                     return;
                 }
             };
-            let valid = veil7::chain_verify(&events, &expected);
+            let valid = veil7::chain_verify(&event_refs, &expected);
             if valid.unwrap_u8() == 1 {
                 println!("valid=1 transcript={}", hex_root);
             } else {
-                // On mismatch, print the actual root so the auditor can see
-                // what the events actually hash to. No secret material in
-                // the output: the root is public.
-                match veil7::chain_root(&events) {
+                match veil7::chain_root(&event_refs) {
                     Ok(actual) => println!("valid=0 transcript={}", hex(&actual)),
                     Err(_) => println!("valid=0 transcript=-"),
                 }
             }
         }
         "prove" => {
-            let sub = args.get(2).map(|s| s.as_str()).unwrap_or("");
-            run_prove(sub, &args[3..]);
+            let sub = args_os
+                .get(2)
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let rest: Vec<String> = args_os
+                .get(3..)
+                .unwrap_or(&[])
+                .iter()
+                .map(|s| s.to_string_lossy().to_string())
+                .collect();
+            run_prove(&sub, &rest);
         }
         "batch-sign" => {
-            // Each remaining argument is one claim to attest.
-            let claims: Vec<veil7::Claim<'_>> = args[2..]
+            let owned_args: Vec<Vec<u8>> = args_os
+                .get(2..)
+                .unwrap_or(&[])
                 .iter()
-                .map(|s| veil7::Claim::new(s.as_bytes()))
+                .map(|s| s.to_string_lossy().as_bytes().to_vec())
                 .collect();
+            let claims: Vec<veil7::Claim<'_>> =
+                owned_args.iter().map(|s| veil7::Claim::new(s)).collect();
+            if claims.is_empty() {
+                println!("valid=0 transcript=-");
+                return;
+            }
             match veil7::verify_batch(&claims) {
                 Ok(v) => {
                     let valid = v.is_valid_bool() as u8;
@@ -110,7 +175,10 @@ fn main() {
             }
         }
         "blind-sign" => {
-            let text = args.get(2).map(|s| s.as_str()).unwrap_or("");
+            let text = args_os
+                .get(2)
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
             match veil7::blind::blind_attest(text.as_bytes()) {
                 Ok((v, unblinded)) => {
                     let valid = v.is_valid_bool() as u8;
@@ -125,10 +193,18 @@ fn main() {
             }
         }
         "threshold" => {
-            // threshold <n> <m> <text>
-            let n: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
-            let m: usize = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(0);
-            let text = args.get(4).map(|s| s.as_str()).unwrap_or("");
+            let n: usize = args_os
+                .get(2)
+                .and_then(|s| s.to_string_lossy().parse().ok())
+                .unwrap_or(0);
+            let m: usize = args_os
+                .get(3)
+                .and_then(|s| s.to_string_lossy().parse().ok())
+                .unwrap_or(0);
+            let text = args_os
+                .get(4)
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
             let claim = veil7::Claim::new(text.as_bytes());
             match veil7::threshold::threshold_verify(&claim, n, m) {
                 Ok(v) => {
@@ -145,7 +221,10 @@ fn main() {
             }
         }
         "hybrid-sign" => {
-            let text = args.get(2).map(|s| s.as_str()).unwrap_or("");
+            let text = args_os
+                .get(2)
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
             let claim = veil7::Claim::new(text.as_bytes());
             match veil7::hybrid::hybrid_attest(&claim) {
                 Ok(v) => print_verdict(&v),
@@ -153,9 +232,11 @@ fn main() {
             }
         }
         "vm-execute" => {
-            // Argument: hex-encoded bytecode.
-            let hex_code = args.get(2).map(|s| s.as_str()).unwrap_or("");
-            match hex_decode(hex_code) {
+            let hex_code = args_os
+                .get(2)
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            match hex_decode(&hex_code) {
                 Some(code) => {
                     let mut vm = veil7::execution::MicroVM::new();
                     let root = vm.execute(&code);
@@ -173,12 +254,28 @@ fn main() {
     }
 }
 
+/// Check if a file path is blocked (e.g. /proc, /dev).
+fn is_blocked_path(path: &str) -> bool {
+    for prefix in BLOCKED_PREFIXES {
+        if path.starts_with(prefix) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Check if a file exceeds the maximum file size limit.
+fn is_file_too_large(path: &str) -> bool {
+    match std::fs::metadata(path) {
+        Ok(meta) => meta.len() > MAX_FILE_SIZE,
+        Err(_) => false, // Let the actual read fail with a proper error
+    }
+}
+
 /// Dispatch the universal-verification subcommand.
 fn run_prove(relation: &str, rest: &[String]) {
     match relation {
         "hash-preimage" => {
-            // Argument: 64-char hex seed (32 bytes). Run the relation,
-            // return the engine verdict bound to the derived Lamport pk.
             let hex_seed = rest.first().map(|s| s.as_str()).unwrap_or("");
             let seed = match parse_hex_root(hex_seed) {
                 Some(s) => s,
@@ -196,8 +293,6 @@ fn run_prove(relation: &str, rest: &[String]) {
             }
         }
         "merkle-root" => {
-            // Arguments: each remaining arg is one leaf as hex bytes
-            // (variable length). Compute the Merkle root of the leaf set.
             let mut leaves: Vec<Vec<u8>> = Vec::with_capacity(rest.len());
             for arg in rest {
                 match hex_decode(arg) {
@@ -219,8 +314,6 @@ fn run_prove(relation: &str, rest: &[String]) {
             }
         }
         "merkle-include" => {
-            // Arguments: <hex_leaf> <hex_root> <index> <hex_sib1> [<hex_sib2>..]
-            // Verifier side of the Merkle inclusion relation.
             if rest.len() < 3 {
                 println!("valid=0 transcript=-");
                 return;
@@ -256,11 +349,6 @@ fn run_prove(relation: &str, rest: &[String]) {
                     }
                 }
             }
-            // We don't know leaf_count from the proof alone (it's part of
-            // the public statement). Recover it from the sibling count:
-            // a tree with n leaves has ceil(log2(n)) levels in its path,
-            // and the number of siblings = number of consumed levels.
-            // Reconstruct n_min = 2^siblings, then allow odd-tree bumping.
             let leaf_count = if siblings.is_empty() {
                 1
             } else {
@@ -274,8 +362,6 @@ fn run_prove(relation: &str, rest: &[String]) {
             }
         }
         "ml-dsa" => {
-            // Argument: 64-char hex seed (32 bytes). Run the ML-DSA-65
-            // key-knowledge relation.
             let hex_seed = rest.first().map(|s| s.as_str()).unwrap_or("");
             let seed = match parse_hex_root(hex_seed) {
                 Some(s) => s,
@@ -291,22 +377,7 @@ fn run_prove(relation: &str, rest: &[String]) {
                 Err(_) => println!("valid=0 transcript=-"),
             }
         }
-        "range-proof" => {
-            // Arguments: <value> <min> <max>
-            let value: u64 = rest.first().and_then(|s| s.parse().ok()).unwrap_or(0);
-            let min: u64 = rest.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
-            let max: u64 = rest.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
-            let witness = veil7::relations::range_proof::Witness { value, min, max };
-            match veil7::prove_and_verify::<veil7::relations::range_proof::RangeProof>(
-                &witness, b"",
-            ) {
-                Ok(v) => print_verdict(&v),
-                Err(_) => println!("valid=0 transcript=-"),
-            }
-        }
         "pedersen" => {
-            // Arguments: <hex_value> <hex_blinding> — two 64-char hex strings.
-            // Runs the Pedersen commitment opening relation.
             let hex_value = rest.first().map(|s| s.as_str()).unwrap_or("");
             let hex_blinding = rest.get(1).map(|s| s.as_str()).unwrap_or("");
             let value = match parse_hex_root(hex_value) {
@@ -325,6 +396,18 @@ fn run_prove(relation: &str, rest: &[String]) {
             };
             let witness = veil7::relations::pedersen::Witness { value, blinding };
             match veil7::prove_and_verify::<veil7::relations::pedersen::PedersenCommitment>(
+                &witness, b"",
+            ) {
+                Ok(v) => print_verdict(&v),
+                Err(_) => println!("valid=0 transcript=-"),
+            }
+        }
+        "range-proof" => {
+            let value: u64 = rest.first().and_then(|s| s.parse().ok()).unwrap_or(0);
+            let min: u64 = rest.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+            let max: u64 = rest.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
+            let witness = veil7::relations::range_proof::Witness { value, min, max };
+            match veil7::prove_and_verify::<veil7::relations::range_proof::RangeProof>(
                 &witness, b"",
             ) {
                 Ok(v) => print_verdict(&v),
@@ -377,9 +460,7 @@ fn hex_decode(s: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
-/// Parse a 64-char lowercase/uppercase hex string into a 32-byte root.
-/// Returns `None` on length mismatch or non-hex characters — the caller
-/// surfaces this as `valid=0` (no panic, no log).
+/// Parse a 64-char hex string into a 32-byte array.
 fn parse_hex_root(s: &str) -> Option<[u8; 32]> {
     if s.len() != 64 {
         return None;
@@ -408,9 +489,9 @@ fn print_help() {
     eprintln!("veil7");
     eprintln!("sign <text> | sign-file <path> | sign-stream <path>");
     eprintln!("blind-sign <text> | hybrid-sign <text>");
-    eprintln!("batch-sign <text1> <text2>.. | threshold <n> <m> <text>");
+    eprintln!("batch-sign <t1> <t2>.. | threshold <n> <m> <text>");
     eprintln!("chain <ev>.. | chain-root <ev>.. | verify <hex> <ev>..");
-    eprintln!("vm-execute <hex_bytecode>");
+    eprintln!("vm-execute <hex>");
     eprintln!(
         "prove hash-preimage | ml-dsa | pedersen | range-proof | merkle-root | merkle-include"
     );
