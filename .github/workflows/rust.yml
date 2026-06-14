@@ -132,6 +132,27 @@ jobs:
           path: target/wasm32-unknown-unknown/release/veil7.wasm
           retention-days: 30
 
+  kani:
+    name: Kani (formal verification)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install Kani
+        run: cargo install kani-verifier
+      - name: Run Kani proofs
+        run: |
+          cargo kani --harness prove_zeroize_bytes_zeros_all
+          cargo kani --harness prove_zeroize_bytes_empty_no_panic
+          cargo kani --harness prove_shake256_reader_no_panic_on_overflow
+          cargo kani --harness prove_gf256_mul_defined_for_all_inputs
+          cargo kani --harness prove_gf256_inv_defined_for_nonzero
+          cargo kani --harness prove_shamir_split_valid_params
+          cargo kani --harness prove_shamir_split_rejects_invalid
+          cargo kani --harness prove_ct_shake256_counter_increments
+        continue-on-error: true
+        # continue-on-error: Kani is experimental; failures don't block CI
+
   cargo-vet:
     name: cargo-vet (dependency audit)
     runs-on: ubuntu-latest

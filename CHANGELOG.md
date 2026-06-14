@@ -15,6 +15,19 @@ Full codebase security audit performed. All HIGH and MEDIUM findings resolved:
 - **L2:** `Shake256Reader::read()` no longer panics (truncates + zero-fills)
 - **L6:** `Commitment` Debug impl redacts bytes (no metadata leakage)
 
+### Kani Formal Verification (2026-06)
+
+- `proofs/kani_proofs.rs` — 8 Kani proof harnesses:
+  - `prove_zeroize_bytes_zeros_all` — verify zeroize_bytes zeros all bytes
+  - `prove_zeroize_bytes_empty_no_panic` — no panic on empty slice
+  - `prove_shake256_reader_no_panic_on_overflow` — no panic on >256 bytes
+  - `prove_gf256_mul_defined_for_all_inputs` — GF(2^8) mul no panic
+  - `prove_gf256_inv_defined_for_nonzero` — GF(2^8) inv no panic for nonzero
+  - `prove_shamir_split_valid_params` — split succeeds for valid n, t
+  - `prove_shamir_split_rejects_invalid` — split rejects t > n, t < 2
+  - `prove_ct_shake256_counter_increments` — counter increments per update
+- Kani CI job added (nightly Rust, continue-on-error)
+
 ### Dependency Migration (2026-06)
 
 - **ML-KEM-768:** Migrated from RustCrypto `ml-kem 0.3` to `libcrux-ml-kem 0.0.9`

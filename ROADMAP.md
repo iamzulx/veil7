@@ -148,10 +148,13 @@ The implementation MUST produce identical output.
 
 ### 2.3 — Formal Verification (MEDIUM 🟡)
 
+**Status:** ✅ SETUP COMPLETE — 8 Kani proof harnesses + CI job
+
 ```
-- [ ] Kani model checking for L0→L7 pipeline
-- [ ] Prove: no secret-dependent branches
-- [ ] Prove: all secrets zeroized before scope exit
+- [x] Kani proof harnesses (proofs/kani_proofs.rs — 8 proofs)
+- [x] Kani CI job (nightly Rust, continue-on-error)
+- [ ] Prove: no secret-dependent branches (needs expanded harnesses)
+- [ ] Prove: all secrets zeroized before scope exit (needs expanded harnesses)
 ```
 
 ### 2.4 — Fuzzing Infrastructure (MEDIUM 🟡)
