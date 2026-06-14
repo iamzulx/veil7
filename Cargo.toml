@@ -16,14 +16,14 @@ required-features = ["std"]
 
 [features]
 default = ["std"]
-std = ["dep:getrandom"]
+std = ["dep:getrandom", "dep:libc"]
 
 [dependencies]
 # --- Entropy: OS CSPRNG (pure syscall on Android, no C deps); optional for no_std ---
 getrandom = { version = "0.2", optional = true }
 
-# --- Memory locking: mlock/munlock syscalls (already in tree via getrandom) ---
-libc = "0.2"
+# --- Memory locking: mlock/munlock syscalls (not available on WASM) ---
+libc = { version = "0.2", optional = true }
 
 # --- Post-Quantum primitives (formally verified, libcrux) ---
 # Phase 1.1: All PQ operations via libcrux (hax/F* verified)

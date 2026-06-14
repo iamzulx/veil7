@@ -26,8 +26,12 @@
 
 #![allow(unsafe_code)]
 
+extern crate alloc;
 use alloc::boxed::Box;
 use core::sync::atomic::{compiler_fence, Ordering};
+
+#[cfg(feature = "std")]
+extern crate libc;
 
 /// Wipe bytes with volatile stores plus a compiler fence, so the scrub cannot be
 /// elided as a dead store or reordered past a security boundary.
@@ -83,8 +87,12 @@ pub(crate) fn zeroize_u64(word: &mut u64) {
 ///     pointer moves, not the pages we locked).
 ///   * If `locked` is true, the page range is currently `mlock`'d.
 ///   * On drop: zeroise the bytes, then `munlock` (if it was locked).
+///
+/// With `std` feature: uses `libc::mlock`/`munlock` for memory pinning.
+/// Without `std`: provides same API but without memory locking (best-effort).
 pub struct Locked<const N: usize> {
     buf: Box<[u8; N]>,
+    #[cfg(feature = "std")]
     locked: bool,
 }
 
@@ -95,23 +103,35 @@ impl<const N: usize> Locked<N> {
     /// `is_locked()` returns false.
     pub fn new() -> Self {
         let buf = Box::new([0u8; N]);
-        // SAFETY: `buf` points to exactly N initialised bytes for the lifetime
-        // of this allocation; the range [ptr, ptr+N) is valid for mlock.
-        // Under Miri, mlock is unsupported so we skip it (best-effort anyway).
-        #[cfg(miri)]
-        let locked = false;
-        #[cfg(not(miri))]
-        let locked = unsafe {
-            let ptr = buf.as_ptr() as *const libc::c_void;
-            libc::mlock(ptr, N) == 0
-        };
-        Locked { buf, locked }
+        #[cfg(feature = "std")]
+        {
+            // Under Miri, mlock is unsupported so we skip it (best-effort anyway).
+            #[cfg(miri)]
+            let locked = false;
+            #[cfg(not(miri))]
+            let locked = unsafe {
+                let ptr = buf.as_ptr() as *const libc::c_void;
+                libc::mlock(ptr, N) == 0
+            };
+            Locked { buf, locked }
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            Locked { buf }
+        }
     }
 
     /// Whether the pages are currently pinned in RAM.
     #[inline]
     pub fn is_locked(&self) -> bool {
-        self.locked
+        #[cfg(feature = "std")]
+        {
+            self.locked
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            false
+        }
     }
 
     /// Immutable view of the locked bytes.
@@ -149,6 +169,7 @@ impl<const N: usize> Drop for Locked<N> {
         // 1. Wipe the secret while pages are still resident and locked.
         zeroize_bytes(&mut self.buf[..]);
         // 2. Unlock the pages (only if we successfully locked them).
+        #[cfg(feature = "std")]
         if self.locked {
             // SAFETY: same valid [ptr, ptr+N) range that was passed to mlock;
             // munlock on an unlocked-or-already-wiped range is harmless.
