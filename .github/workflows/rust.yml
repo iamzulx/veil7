@@ -62,12 +62,30 @@ jobs:
           components: miri
       - name: Setup Miri
         run: cargo miri setup
-      - name: Run Miri tests
-        run: cargo miri test --lib
+      - name: Run Miri tests (non-libcrux modules)
+        run: |
+          # Only test modules that don't depend on libcrux (which uses cpuid
+          # inline assembly unsupported by Miri). These modules use pure
+          # SHAKE256 / GF(2^8) arithmetic and are fully Miri-compatible.
+          cargo miri test --lib common::
+          cargo miri test --lib chain::
+          cargo miri test --lib shamir::
+          cargo miri test --lib keccak_ct::
+          cargo miri test --lib storage::
+          cargo miri test --lib execution::
+          cargo miri test --lib relations::hash_preimage::
+          cargo miri test --lib relations::pedersen::
+          cargo miri test --lib relations::range_proof::
+          cargo miri test --lib relations::merkle::
+          cargo miri test --lib layers::l0_memlock::
+          cargo miri test --lib layers::l6_zeroise::
+          cargo miri test --lib entropy_sources::
         env:
           MIRIFLAGS: "-Zmiri-disable-isolation"
         # -Zmiri-disable-isolation: needed for getrandom (OS entropy calls)
-        # Miri checks for undefined behavior, memory leaks, and data races.
+        # Modules skipped: pipeline, blind, hybrid, threshold, commit_reveal,
+        # interface, l2_keygen, l3_commit, l4_prove, l5_verify, relations::ml_dsa,
+        # pq_backends (all use libcrux cpuid which Miri cannot emulate).
 
   cargo-vet:
     name: cargo-vet (dependency audit)
