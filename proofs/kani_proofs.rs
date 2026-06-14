@@ -134,3 +134,84 @@ fn prove_ct_shake256_counter_increments() {
     // Counter should be 2 after two updates
     // (We can't directly observe the counter, but we verify no panic)
 }
+
+/// Proof: KEM keygen produces valid keypair (no panic, valid sizes).
+#[cfg(kani)]
+#[kani::proof]
+fn prove_kem_keygen_valid_sizes() {
+    let seed: [u8; 64] = kani::any();
+    let kp = veil7::pq_backends::libcrux_backend::kem_keygen(seed);
+    let pk_bytes = veil7::pq_backends::libcrux_backend::kem_pk_bytes(&kp);
+    let sk_bytes = veil7::pq_backends::libcrux_backend::kem_sk_bytes(&kp);
+    // Verify sizes match FIPS 203 spec
+    assert_eq!(pk_bytes.len(), 1184, "ML-KEM-768 pk must be 1184 bytes");
+    assert_eq!(sk_bytes.len(), 2400, "ML-KEM-768 sk must be 2400 bytes");
+}
+
+/// Proof: KEM roundtrip produces matching shared secrets.
+#[cfg(kani)]
+#[kani::proof]
+fn prove_kem_roundtrip_matches() {
+    let seed: [u8; 64] = kani::any();
+    let coins: [u8; 32] = kani::any();
+
+    let kp = veil7::pq_backends::libcrux_backend::kem_keygen(seed);
+    let pk = veil7::pq_backends::libcrux_backend::kem_pk_from_bytes(
+        veil7::pq_backends::libcrux_backend::kem_pk_bytes(&kp),
+    );
+    let sk = veil7::pq_backends::libcrux_backend::kem_sk_from_bytes(
+        veil7::pq_backends::libcrux_backend::kem_sk_bytes(&kp),
+    );
+
+    let (ct, ss_enc) = veil7::pq_backends::libcrux_backend::kem_encapsulate(&pk, coins);
+    let ss_dec = veil7::pq_backends::libcrux_backend::kem_decapsulate(&sk, &ct);
+
+    // Roundtrip must produce matching shared secrets
+    assert_eq!(
+        ss_enc.as_slice(),
+        ss_dec.as_slice(),
+        "KEM roundtrip must produce matching shared secrets"
+    );
+}
+
+/// Proof: DSA keygen produces valid keypair (no panic, valid sizes).
+#[cfg(kani)]
+#[kani::proof]
+fn prove_dsa_keygen_valid_sizes() {
+    let seed: [u8; 32] = kani::any();
+    let kp = veil7::pq_backends::libcrux_backend::dsa_keygen(seed);
+    let vk_bytes = veil7::pq_backends::libcrux_backend::dsa_vk_bytes(&kp);
+    let sk_bytes = veil7::pq_backends::libcrux_backend::dsa_sk_bytes(&kp);
+    // Verify sizes match FIPS 204 spec
+    assert_eq!(vk_bytes.len(), 1952, "ML-DSA-65 vk must be 1952 bytes");
+    assert_eq!(sk_bytes.len(), 4032, "ML-DSA-65 sk must be 4032 bytes");
+}
+
+/// Proof: DSA sign/verify roundtrip produces valid signature.
+#[cfg(kani)]
+#[kani::proof]
+fn prove_dsa_sign_verify_roundtrip() {
+    let seed: [u8; 32] = kani::any();
+    let message: [u8; 16] = kani::any();
+    let randomness: [u8; 32] = kani::any();
+    let ctx = b"veil7:kani";
+
+    let kp = veil7::pq_backends::libcrux_backend::dsa_keygen(seed);
+    let sig = match veil7::pq_backends::libcrux_backend::dsa_sign(
+        veil7::pq_backends::libcrux_backend::dsa_sk_bytes(&kp),
+        &message,
+        ctx,
+        randomness,
+    ) {
+        Ok(s) => s,
+        Err(_) => return, // Signing can fail on invalid inputs
+    };
+
+    let vk = veil7::pq_backends::libcrux_backend::dsa_vk_from_bytes(
+        veil7::pq_backends::libcrux_backend::dsa_vk_bytes(&kp),
+    );
+    let result = veil7::pq_backends::libcrux_backend::dsa_verify(&vk, &sig, &message, ctx);
+
+    // Valid signature must verify
+    assert!(result.is_ok(), "valid signature must verify");
+}

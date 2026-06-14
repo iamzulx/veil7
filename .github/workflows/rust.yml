@@ -150,6 +150,10 @@ jobs:
           cargo kani --harness prove_shamir_split_valid_params
           cargo kani --harness prove_shamir_split_rejects_invalid
           cargo kani --harness prove_ct_shake256_counter_increments
+          cargo kani --harness prove_kem_keygen_valid_sizes
+          cargo kani --harness prove_kem_roundtrip_matches
+          cargo kani --harness prove_dsa_keygen_valid_sizes
+          cargo kani --harness prove_dsa_sign_verify_roundtrip
         continue-on-error: true
         # continue-on-error: Kani is experimental; failures don't block CI
 

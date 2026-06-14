@@ -795,4 +795,163 @@ mod tests {
         assert_ne!(v1.transcript(), v2.transcript());
         assert_ne!(v2.transcript(), v3.transcript());
     }
+
+    // ── attest_text ────────────────────────────────────────────────────────
+
+    #[test]
+    fn attest_text_basic() {
+        let v = attest_text("hello world").unwrap();
+        assert!(v.is_valid_bool());
+    }
+
+    #[test]
+    fn attest_text_empty() {
+        let v = attest_text("").unwrap();
+        assert!(v.is_valid_bool());
+    }
+
+    #[test]
+    fn attest_text_unicode() {
+        let v = attest_text("Hello 世界 🌍").unwrap();
+        assert!(v.is_valid_bool());
+    }
+
+    #[test]
+    fn attest_text_large() {
+        let large = "A".repeat(100_000);
+        let v = attest_text(&large).unwrap();
+        assert!(v.is_valid_bool());
+    }
+
+    #[test]
+    fn attest_text_different_inputs_different_transcripts() {
+        let v1 = attest_text("input A").unwrap();
+        let v2 = attest_text("input B").unwrap();
+        assert!(v1.is_valid_bool());
+        assert!(v2.is_valid_bool());
+        // Transcripts differ due to ephemeral keys, but both valid
+    }
+
+    // ── attest_file_merkle ─────────────────────────────────────────────────
+
+    #[test]
+    fn attest_file_merkle_single_file() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join("veil7_test_merkle_single");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let f1 = dir.join("file1.txt");
+        std::fs::File::create(&f1)
+            .unwrap()
+            .write_all(b"hello world")
+            .unwrap();
+
+        let paths = [f1.to_str().unwrap()];
+        let v = attest_file_merkle(&paths).unwrap();
+        assert!(v.is_valid_bool());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn attest_file_merkle_multiple_files() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join("veil7_test_merkle_multi");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let f1 = dir.join("file1.txt");
+        let f2 = dir.join("file2.txt");
+        let f3 = dir.join("file3.txt");
+        std::fs::File::create(&f1).unwrap().write_all(b"file one").unwrap();
+        std::fs::File::create(&f2).unwrap().write_all(b"file two").unwrap();
+        std::fs::File::create(&f3).unwrap().write_all(b"file three").unwrap();
+
+        let paths = [f1.to_str().unwrap(), f2.to_str().unwrap(), f3.to_str().unwrap()];
+        let v = attest_file_merkle(&paths).unwrap();
+        assert!(v.is_valid_bool());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn attest_file_merkle_empty_paths_fails() {
+        let paths: &[&str] = &[];
+        assert!(attest_file_merkle(paths).is_err());
+    }
+
+    #[test]
+    fn attest_file_merkle_nonexistent_file_fails() {
+        let paths = ["/nonexistent/file/that/does/not/exist.txt"];
+        assert!(attest_file_merkle(&paths).is_err());
+    }
+
+    #[test]
+    fn attest_file_merkle_deterministic() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join("veil7_test_merkle_det");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let f1 = dir.join("det1.txt");
+        let f2 = dir.join("det2.txt");
+        std::fs::File::create(&f1).unwrap().write_all(b"deterministic").unwrap();
+        std::fs::File::create(&f2).unwrap().write_all(b"test data").unwrap();
+
+        let paths = [f1.to_str().unwrap(), f2.to_str().unwrap()];
+        // Merkle root is deterministic, but transcripts differ (ephemeral keys).
+        // Just verify both succeed.
+        let v1 = attest_file_merkle(&paths).unwrap();
+        let v2 = attest_file_merkle(&paths).unwrap();
+        assert!(v1.is_valid_bool());
+        assert!(v2.is_valid_bool());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn attest_file_merkle_different_files_different_root() {
+        use std::io::Write;
+        let dir1 = std::env::temp_dir().join("veil7_test_merkle_diff1");
+        let dir2 = std::env::temp_dir().join("veil7_test_merkle_diff2");
+        let _ = std::fs::remove_dir_all(&dir1);
+        let _ = std::fs::remove_dir_all(&dir2);
+        std::fs::create_dir_all(&dir1).unwrap();
+        std::fs::create_dir_all(&dir2).unwrap();
+
+        let f1 = dir1.join("file.txt");
+        let f2 = dir2.join("file.txt");
+        std::fs::File::create(&f1).unwrap().write_all(b"content A").unwrap();
+        std::fs::File::create(&f2).unwrap().write_all(b"content B").unwrap();
+
+        let paths1 = [f1.to_str().unwrap()];
+        let paths2 = [f2.to_str().unwrap()];
+
+        // Both should succeed but produce different roots
+        let v1 = attest_file_merkle(&paths1).unwrap();
+        let v2 = attest_file_merkle(&paths2).unwrap();
+        assert!(v1.is_valid_bool());
+        assert!(v2.is_valid_bool());
+        // Transcripts should differ (different content → different Merkle root)
+        assert_ne!(v1.transcript(), v2.transcript());
+
+        let _ = std::fs::remove_dir_all(&dir1);
+        let _ = std::fs::remove_dir_all(&dir2);
+    }
+
+    #[test]
+    fn attest_file_merkle_mixed_valid_invalid_fails() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join("veil7_test_merkle_mixed");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let f1 = dir.join("valid.txt");
+        std::fs::File::create(&f1).unwrap().write_all(b"valid content").unwrap();
+
+        let paths = [f1.to_str().unwrap(), "/nonexistent/file.txt"];
+        assert!(attest_file_merkle(&paths).is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

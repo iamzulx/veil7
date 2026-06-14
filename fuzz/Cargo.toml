@@ -101,3 +101,15 @@ name = "fuzz_commit_reveal"
 path = "fuzz_targets/fuzz_commit_reveal.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "fuzz_kem_roundtrip"
+path = "fuzz_targets/fuzz_kem_roundtrip.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_dsa_sign_verify"
+path = "fuzz_targets/fuzz_dsa_sign_verify.rs"
+test = false
+doc = false
