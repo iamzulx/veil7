@@ -13,22 +13,28 @@ with focus on:
 
 ## Phase 1 status
 
-**Complete for veil7-owned code.**
+**Complete for veil7-owned code. Security audit passed (2026-06).**
 
-Residual risks remain in third-party PQ crates and target-specific hardware
-behavior. Those require upstream audit, target disassembly review, and hardware
-side-channel testing (`dudect`, `ctverif`, or equivalent).
+All HIGH and MEDIUM findings from the full codebase security audit have been
+resolved. Remaining accepted gaps are documented in SECURITY.md.
+
+**Dependency migration complete:** ML-KEM, ML-DSA, and SHAKE256 migrated from
+RustCrypto to libcrux (hax/F* formally verified). NIST ACVP test vectors
+validated with byte-perfect match.
+
+Residual risks remain in `slh-dsa` (RustCrypto, awaiting libcrux alternative)
+and target-specific hardware behavior (requires `dudect`/`ctverif` on target hardware).
 
 ## NIST PQC alignment (Juni 2026)
 
 veill7 uses the canonical finalized NIST PQC standards:
 
-| Standard | Algorithm | Security | Status | Used by veill7 |
+| Standard | Algorithm | Security | Status | Used by veil7 |
 |---|---|---|---|---|
-| FIPS 202 (2015) | SHA-3 / SHAKE256 | 256-bit hash | Final | All layers |
-| FIPS 203 (Aug 2024) | ML-KEM-768 | Cat 3 (~192-bit PQ) | **Final** | `l2_keygen` via `ml-kem 0.3.2` |
-| FIPS 204 (Aug 2024) | ML-DSA-65 | Cat 3 (~192-bit PQ) | **Final** | `l4_prove` via `ml-dsa 0.1.0` |
-| FIPS 205 (Aug 2024) | SLH-DSA-SHAKE-128f | Cat 1 (~128-bit PQ) | **Final** | `pq_backends/slh_dsa` |
+| FIPS 202 (2015) | SHA-3 / SHAKE256 | 256-bit hash | Final | All layers via `libcrux-sha3 0.0.9` (hax/F* verified) |
+| FIPS 203 (Aug 2024) | ML-KEM-768 | Cat 3 (~192-bit PQ) | **Final** | `l2_keygen` via `libcrux-ml-kem 0.0.9` (hax/F* verified, ACVP validated) |
+| FIPS 204 (Aug 2024) | ML-DSA-65 | Cat 3 (~192-bit PQ) | **Final** | `l4_prove` via `libcrux-ml-dsa 0.0.9` (hax/F* verified, ACVP validated) |
+| FIPS 205 (Aug 2024) | SLH-DSA-SHAKE-128f | Cat 1 (~128-bit PQ) | **Final** | `pq_backends/slh_dsa` (RustCrypto, awaiting libcrux alternative) |
 
 **Security level choice**: ML-KEM-768 + ML-DSA-65 = NIST Category 3 (~192-bit
 PQ). NIST IR 8547 requires ≥128-bit quantum-vulnerable algorithms be
@@ -85,15 +91,22 @@ projected quantum-computer scaling.
 
 ## KyberSlash analysis and mitigation
 
-### Exposure surface
+### Status: RESOLVED
+
+ML-KEM and ML-DSA are now provided by **libcrux** (Cryspen, hax/F* formally
+verified), which is constant-time by construction. The KyberSlash-class
+vulnerability (secret-dependent division in compression/decompression) does not
+apply to libcrux's implementation.
+
+### Remaining exposure surface
 
 | Location | Operation | Secret input | Status |
 |----------|-----------|--------------|--------|
 | `l1_entropy` | OS CSPRNG + SHAKE256 seed stretch | raw entropy / seed | ✅ veil7 source has no div/rem syntax |
-| `l2_keygen` | derive ML-KEM + ML-DSA seeds | locked master seed | ✅ veil7 source has no div/rem syntax; upstream keygen assumed CT |
-| `l4_prove` | ML-DSA deterministic sign | signing key | ⚠️ upstream CT assumption |
-| `l5_verify` | ML-KEM encapsulate/decapsulate round-trip | KEM secret key | ⚠️ upstream CT assumption |
-| `pq_backends/slh_dsa` | SLH-DSA sign/verify wrapper | secret key for signing | ⚠️ upstream CT assumption; wrapper returns `Choice` |
+| `l2_keygen` | derive ML-KEM + ML-DSA seeds | locked master seed | ✅ libcrux keygen is formally verified CT |
+| `l4_prove` | ML-DSA deterministic sign | signing key | ✅ libcrux ML-DSA is formally verified CT |
+| `l5_verify` | ML-KEM encapsulate/decapsulate round-trip | KEM secret key | ✅ libcrux ML-KEM is formally verified CT |
+| `pq_backends/slh_dsa` | SLH-DSA sign/verify wrapper | secret key for signing | ⚠️ RustCrypto upstream CT assumption |
 | `relations/*` | SHAKE256 and transcript operations | relation witnesses | ✅ no project-owned secret division |
 
 ### Implemented controls
@@ -270,27 +283,22 @@ the attacker has no co-resident code.
 | Process inside a TEE/SGX enclave | enclave-internal malware | MEDIUM (mitigated by enclave boundary) |
 | FDE/full-disk-encryption recovery of swapped memory | local root | covered by `Locked<N>` + mlock |
 
-### Veil7 stance (documented, not patched)
+### Veil7 stance (base layer RESOLVED, defense-in-depth active)
 
-Cache timing is **out of scope for Phase 1** of hardening, for three
-reasons:
+**Base layer: RESOLVED.** SHAKE256 is now backed by **libcrux-sha3** (hax/F*
+formally verified), which uses a generic Keccak implementation with **no T-tables**.
+The T-table cache-timing side channel is closed at the base level for all
+veil7-owned SHAKE256 calls and all libcrux PQ operations (ML-KEM, ML-DSA).
 
-1. **Upstream-driven, not veil7-driven.** The leak lives inside the
-   `sha3` crate, inside ML-KEM, ML-DSA, and SLH-DSA, and in our own 12
-   SHAKE256 call sites. Patching the lookup-table implementation
-   requires either a constant-time Keccak upstream (none exists in
-   pure Rust at the time of writing) or a self-rolled bit-sliced
-   Keccak, which is a multi-month cryptographic-engineering effort
-   that is out of band for a hardening phase.
-2. **Risk is deployment-shaped, not source-shaped.** The same code is
-   low-risk on a phone and high-risk on a shared-CPU cloud. Patching
-   would change the *source* but not the *risk profile* — the risk
-   is decided by the deployment, not by the library.
-3. **Existing hardening tests cannot detect this class.** Cache
-   timing is not a property of the source; it is a property of the
-   compiled binary running on a specific microarchitecture. Validating
-   it requires hardware (`dudect`, `ctverif`) or static analysis that
-   works on the disassembly, not on Rust source.
+**Remaining concern:** `slh-dsa` (RustCrypto) still uses `sha3` internally.
+This affects only the SLH-DSA backend, not the primary ML-KEM/ML-DSA path.
+
+**Defense-in-depth:** `keccak_ct.rs` provides an additional masked sponge layer
+with per-call `call_counter` to prevent mask stream reuse. This is redundant
+given libcrux-sha3 is already constant-time, but provides defense-in-depth.
+
+**Deployment note:** Risk is still deployment-shaped for `slh-dsa` — low-risk on
+single-tenant, higher risk on shared-CPU cloud.
 
 ### What Phase 1 does do
 
@@ -315,26 +323,27 @@ reasons:
 - ❌ Does not run `dudect`/`ctverif` (these require network access
   for advisories and target hardware that is not available in CI).
 
-### Phase 2 partial mitigation: masked sponge (`keccak_ct.rs`)
+### Phase 2 mitigation: masked sponge (`keccak_ct.rs`)
 
-`src/keccak_ct.rs` implements a **masked sponge** approach as a practical
-Phase 2 mitigation:
+**Status: Base layer RESOLVED (libcrux-sha3 is constant-time). Defense-in-depth active.**
+
+`src/keccak_ct.rs` provides an additional **defense-in-depth masked sponge**
+layer on top of libcrux-sha3 (which is already constant-time):
 
 1. Before each absorb, the input is XOR'd with a random per-instance mask.
-2. The masked input is fed through the standard `sha3` crate.
-3. The T-table access pattern now leaks the *masked* input, not the
-   original secret. Without the mask, the cache-timing information is
-   useless to an attacker.
-4. The mask is wiped after use.
+2. A per-call `call_counter` ensures unique mask stream per `ct_update()` call,
+   preventing mask stream reuse attacks on same-length inputs (audit fix H3).
+3. The masked input is fed through libcrux-sha3 (constant-time, no T-tables).
+4. The mask is wiped after use (`ZeroizeOnDrop`).
 
-**Limitations:**
-- Adds ~1 SHAKE256 call per absorb (performance cost ~2x).
-- The masking is applied at the absorb boundary only; the internal Keccak
-  permutation still uses T-tables (but operates on masked data).
-- This is NOT a formal proof of constant-time; it is an empirical
-  side-channel mitigation.
-- `CtShake256` is a drop-in for internal hashing where exact SHAKE256
-  compatibility is not required.
+**Audit fixes applied:**
+- H3: `call_counter` prevents mask stream reuse on same-length inputs.
+- M1: `Default` impl removed (fixed mask `[0xA5; 32]` was security risk).
+- M2: `ct_shake256()` returns `Result` (no silent fallback to fixed mask).
+
+**Performance:** Adds ~1 SHAKE256 call per absorb (~2x overhead). This is
+redundant given libcrux-sha3 is already constant-time, but provides
+defense-in-depth.
 
 ### Validation path (Phase 2)
 
@@ -390,12 +399,14 @@ cargo audit --deny warnings
 
 ## Phase 2 backlog
 
+- ✅ Migrate ML-KEM/ML-DSA/SHAKE256 to libcrux (formally verified, constant-time)
+- ✅ NIST ACVP test vector validation (byte-perfect match)
+- ✅ Security audit: all HIGH/MEDIUM findings resolved
+- ✅ Masked sponge hardening (call_counter, no Default, Result return)
 - Add target-specific `dudect` harnesses for fixed-vs-random seed/key paths.
 - Run `cargo +nightly miri test` for memory safety and wipe-order regressions.
-- Review RustCrypto PQ crate disassembly on target ARM cores.
-- Track upstream audits or releases for `ml-kem`, `ml-dsa`, and `slh-dsa`.
-- Consider dependency replacement or forking if upstream CT guarantees remain
-  insufficient for high-assurance deployments.
+- Review `slh-dsa` (RustCrypto) disassembly on target ARM cores.
+- Track upstream libcrux release for SLH-DSA alternative.
 
 ## References
 

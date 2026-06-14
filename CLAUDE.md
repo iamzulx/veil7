@@ -114,25 +114,24 @@ cargo build --release
 
 ## Side-channel threat model (documented assumption)
 
-veil7 uses `sha3` 0.10 (RustCrypto) which is a **T-table Keccak**
-implementation. This is a per-call cache-timing side channel against
-the absorbed secret on shared-cache hardware (Flush+Reload, Prime+Probe,
-Evict+Time on co-resident VMs / same-core L3). The 12 SHAKE256 call
-sites in veil7-owned code each carry a `// SIDE-CHANNEL:` comment
-pointing to `SPEC-HARDENING.md` §"Cache timing and T-table side channels",
-which lists every call site, the secret class that flows in, and the
-risk class per deployment (LOW on single-tenant hardware, MEDIUM-HIGH
-on shared-CPU cloud, HIGH on multi-tenant bare-metal).
+**Base layer: RESOLVED.** SHAKE256 is now backed by **libcrux-sha3** (hax/F*
+formally verified), which uses a generic Keccak implementation with **no T-tables**.
+The T-table cache-timing side channel is closed at the base level for all
+veil7-owned SHAKE256 calls and all libcrux PQ operations (ML-KEM, ML-DSA).
 
-**The threat is documented as an accepted Phase 1 gap** — patching
-requires either a constant-time Keccak upstream (none exists in pure
-Rust) or a self-rolled bit-sliced implementation, both of which are
-out of scope for hardening. Phase 2 budgets a `dudect`/`ctverif`
-hardware validation sprint.
+**Remaining concern:** `slh-dsa` (RustCrypto) still uses `sha3` internally.
+This affects only the SLH-DSA backend, not the primary ML-KEM/ML-DSA path.
 
-The same caveat applies to all RustCrypto PQ crates (`ml-kem`, `ml-dsa`,
-`slh-dsa`) which use the same `sha3` crate internally. Phase 1 does not
-fork or replace them.
+**Defense-in-depth:** `keccak_ct.rs` provides an additional masked sponge layer
+with per-call `call_counter` to prevent mask stream reuse. This is redundant
+given libcrux-sha3 is already constant-time, but provides defense-in-depth.
+
+Each SHAKE256 call site in veil7-owned code carries a `// SIDE-CHANNEL:` comment
+pointing to `SPEC-HARDENING.md` with the risk class per deployment (LOW on
+single-tenant hardware, MEDIUM-HIGH on shared-CPU cloud for `slh-dsa` only).
+
+Phase 2 budgets a `dudect`/`ctverif` hardware validation sprint for
+target-specific timing validation.
 
 ## When in doubt
 

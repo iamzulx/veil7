@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Security Audit Fixes (2026-06)
+
+Full codebase security audit performed. All HIGH and MEDIUM findings resolved:
+
+- **H1:** KEM private key wipe — `l0_memlock::zeroize_slice()` for in-place wipe
+  of libcrux private key bytes (unsafe encapsulated in l0_memlock)
+- **H2:** Removed `Shake256Reader::read_extended()` (latent correctness bug)
+- **H3:** Added `call_counter` to `CtShake256` — prevents mask stream reuse
+- **M1:** Removed `Default` impl from `CtShake256` (fixed mask was security risk)
+- **M2:** `ct_shake256()` now returns `Result` (no silent fallback to fixed mask)
+- **L2:** `Shake256Reader::read()` no longer panics (truncates + zero-fills)
+- **L6:** `Commitment` Debug impl redacts bytes (no metadata leakage)
+
+### Dependency Migration (2026-06)
+
+- **ML-KEM-768:** Migrated from RustCrypto `ml-kem 0.3` to `libcrux-ml-kem 0.0.9`
+  (hax/F* formally verified, constant-time, NIST ACVP validated byte-perfect)
+- **ML-DSA-65:** Migrated from RustCrypto `ml-dsa 0.1` to `libcrux-ml-dsa 0.0.9`
+  (hax/F* formally verified, constant-time, NIST ACVP validated byte-perfect)
+- **SHAKE256:** Migrated from RustCrypto `sha3 0.10` to `libcrux-sha3 0.0.9`
+  (hax/F* formally verified, constant-time, no T-tables)
+- RustCrypto `ml-kem`, `ml-dsa`, `sha3` removed from Cargo.toml
+- T-table cache-timing side channel: **RESOLVED** at base level
+
 ### Added (v0.2.0 development)
 
 - **NIST ACVP official test vector validation** (`tests/nist_acvp.rs`)

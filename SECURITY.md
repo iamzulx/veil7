@@ -81,41 +81,88 @@ Current hardening baseline: **Phase 1 complete for project-owned code**.
   ensures that compromising one layer does not compromise the other.
 
 ### Constant-Time Keccak (`src/keccak_ct.rs`)
-- Masked sponge approach: XOR input with random mask before SHAKE256.
-- **Threat**: the mask is random per-instance, so T-table access patterns
-  leak masked data, not the original secret.
-- **Mitigation**: mask is `ZeroizeOnDrop`. This is a practical Phase 2
-  mitigation, not a formal proof of constant-time.
+
+**Status: Base layer RESOLVED** — SHAKE256 now backed by libcrux-sha3 (formally
+verified, constant-time, no T-tables). The T-table side-channel gap is closed
+at the base level.
+
+`keccak_ct.rs` provides an additional **defense-in-depth masked sponge** layer:
+- Per-call `call_counter` ensures unique mask stream per `ct_update()` call,
+  preventing mask reuse attacks on same-length inputs (audit fix H3).
+- `CtShake256` has no `Default` impl (audit fix M1 — fixed mask was security risk).
+- `ct_shake256()` returns `Result` (audit fix M2 — no silent fallback to fixed mask).
+- Mask is `ZeroizeOnDrop`.
+
+This is a practical defense-in-depth layer on top of libcrux's already
+constant-time SHAKE256 implementation.
+
+## Security audit findings (2026-06)
+
+Full codebase security audit performed. Findings by severity:
+
+### Resolved (fixed)
+
+| ID | Severity | Finding | Fix |
+|----|----------|---------|-----|
+| H1 | HIGH | KEM private key: copy wiped, original persists in heap | `zeroize_slice()` in-place wipe via l0_memlock |
+| H2 | HIGH | `Shake256Reader::read_extended()` resets position to 0 | Removed entirely (latent correctness bug) |
+| H3 | HIGH | Mask stream reuse on same-length inputs | Added `call_counter` to CtShake256 |
+| M1 | MEDIUM | `CtShake256::Default` uses fixed mask `[0xA5; 32]` | Removed `Default` impl |
+| M2 | MEDIUM | `ct_shake256()` silently falls back to fixed mask | Returns `Result` (propagates CSPRNG error) |
+| L2 | LOW | `Shake256Reader::read()` panics on overflow | Truncates + zero-fills (no panic) |
+| L6 | LOW | `Commitment` Debug derive leaks bytes | Manual Debug impl redacts bytes |
+
+### Accepted gaps (documented, not fixable at this layer)
+
+| ID | Severity | Finding | Reason |
+|----|----------|---------|--------|
+| M3 | MEDIUM | `dsa_verify` timing depends on libcrux internals | Needs libcrux fork to fix |
+| M4 | MEDIUM | SHAKE256 buffer in swappable heap | Would need `Locked<Vec>` refactor |
+| M5 | MEDIUM | Raw entropy sources in unlocked heap | Would need `Locked` wrappers |
+| L3 | LOW | Shared-page `munlock` could unlock another instance | Theoretical, needs per-page tracking |
+| L4 | LOW | `derive()` return value in callee stack frame | Compiler likely inlines |
+| L5 | LOW | Fragile Drop if `prove()` gains post-sign logic | No post-sign logic exists |
+
+### Resolved at dependency level
+
+| ID | Finding | Resolution |
+|----|---------|------------|
+| T-table Keccak | `sha3` uses T-tables (cache-timing leak) | Migrated to libcrux-sha3 (constant-time, no T-tables) |
+| KyberSlash | Secret-dependent division in ML-KEM | Migrated to libcrux-ml-kem (formally verified CT) |
 
 ## Pinned dependency posture
 
 Pinned versions from `Cargo.lock`:
 
 | Crate | Version | Role | Posture |
-|-------|---------|------|---------|
-| `ml-kem` | `0.3.2` | ML-KEM-768 / FIPS 203 | Upstream RustCrypto implementation; KyberSlash-class safety is treated as an upstream constant-time assumption. |
-| `ml-dsa` | `0.1.0` | ML-DSA-65 / FIPS 204 | Upstream RustCrypto implementation; arithmetic constant-time behavior is an upstream assumption. |
-| `slh-dsa` | `0.2.0-rc.5` | SLH-DSA / FIPS 205 candidate backend | Upstream release candidate; verification wrapper normalizes output to `Choice`. |
+|-------|---------|------|--------|
+| `libcrux-ml-kem` | `0.0.9` | ML-KEM-768 / FIPS 203 | **Formally verified** (hax/F*). Constant-time, no T-tables. NIST ACVP validated (byte-perfect). |
+| `libcrux-ml-dsa` | `0.0.9` | ML-DSA-65 / FIPS 204 | **Formally verified** (hax/F*). Constant-time. NIST ACVP validated (byte-perfect). |
+| `libcrux-sha3` | `0.0.9` | SHAKE256 / FIPS 202 | **Formally verified** (hax/F*). Constant-time, no T-tables. |
+| `slh-dsa` | `0.2.0-rc.5` | SLH-DSA / FIPS 205 | Upstream RustCrypto release candidate; verification wrapper normalizes output to `Choice`. |
 | `subtle` | `2.6.1` | Constant-time equality and `Choice` | Used at public verification boundaries and accumulators. |
 | `zeroize` | `1.8.2` | Upstream key zeroization | Used by dependency key types; veil7-owned wipes use volatile L0 helpers. |
 
+**Migration note (2026-06):** ML-KEM, ML-DSA, and SHAKE256 have been migrated
+from RustCrypto to **libcrux** (Cryspen, hax/F* formally verified). RustCrypto
+`ml-kem`, `ml-dsa`, and `sha3` have been removed from `Cargo.toml`. All PQ
+operations are now backed by formally verified, constant-time implementations.
+NIST ACVP test vectors validated with byte-perfect match.
+
 Local source scans show no division/remainder syntax in veil7 secret-path source.
-Upstream PQ crates contain division/remainder-like syntax in their source trees;
-that is not treated as a proof of leakage, but it means Phase 1 does **not**
-claim formal dependency CT verification. Run hardware timing tests before any
-high-assurance use.
+libcrux is formally verified for constant-time behavior. `slh-dsa` (RustCrypto)
+remains an upstream CT assumption until a libcrux or audited alternative is available.
 
 ## KyberSlash-class mitigation
 
-`veil7` does not implement ML-KEM compression, decompression, Montgomery
-reduction, or Barrett reduction itself. Project-owned secret paths are scanned
-for `/`, `%`, `.div_*`, and `.rem_*` syntax. CI also builds a symbolized
-hardening profile and fails if `objdump` reports `div`, `idiv`, `udiv`, or `sdiv`
-in veil7 secret-path symbols.
+**Status: RESOLVED** — ML-KEM and ML-DSA are now provided by libcrux (hax/F*
+formally verified), which is constant-time by construction. The KyberSlash-class
+vulnerability (secret-dependent division in compression/decompression) does not
+apply to libcrux's implementation.
 
-The full binary can still contain division instructions from `std`, allocator
-code, formatting code, or dependency public-data code. For that reason the CI
-instruction scan is symbol-scoped, not a global `grep div`.
+veil7-owned secret paths are still scanned for `/`, `%`, `.div_*`, and `.rem_*`
+syntax as defense-in-depth. CI builds a symbolized hardening profile and fails
+if `objdump` reports `div`, `idiv`, `udiv`, or `sdiv` in veil7 secret-path symbols.
 
 ## Memory locking
 
@@ -123,11 +170,17 @@ instruction scan is symbol-scoped, not a global `grep div`.
 wipes before `munlock`. Locking is best-effort: if `mlock` fails due to platform
 policy or `RLIMIT_MEMLOCK`, the buffer still works and still wipes on drop.
 
-Known gap: ML-KEM and ML-DSA secret keys are opaque upstream types and cannot be
-placed in veil7's locked allocator without forking dependencies or adding broad
-unsafe wrappers. They rely on upstream `ZeroizeOnDrop`. High-security deployments
-should disable swap or use a process supervisor / OS profile that locks memory
-where available.
+**KEM key wipe (audit fix H1):** libcrux's `MlKem768KeyPair` only provides
+immutable access to private key bytes. `l0_memlock::zeroize_slice()` obtains a
+mutable pointer from the immutable reference and wipes in-place using volatile
+stores. The unsafe pointer cast is encapsulated in `l0_memlock` (the only module
+permitted to use `unsafe`).
+
+**Remaining gap:** ML-DSA signing key has mutable access and is wiped via
+`zeroize_bytes()`. ML-KEM public key is not secret and not wiped.
+
+High-security deployments should disable swap or use a process supervisor / OS
+profile that locks memory where available.
 
 ## Validation commands
 

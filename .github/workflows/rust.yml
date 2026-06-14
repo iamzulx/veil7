@@ -100,8 +100,8 @@ jobs:
           # Run each fuzz target for 60 seconds
           # In production, increase to 72h+ before release
           for target in fuzz_verify_once fuzz_attest_bytes fuzz_chain_root fuzz_chain_verify fuzz_shake256 fuzz_shamir fuzz_oram fuzz_merkle fuzz_microvm fuzz_hash_preimage fuzz_pedersen fuzz_range_proof fuzz_batch_verify fuzz_blind_attest fuzz_commit_reveal; do
-            echo "=== Fuzzing $target (60s) ==="
-            cargo fuzz run $target -- -max_total_time=60 -max_len=4096 || true
+            echo "=== Fuzzing $target (300s) ==="
+            cargo fuzz run $target -- -max_total_time=300 -max_len=4096 || true
           done
         working-directory: .
       - name: Upload fuzz artifacts
