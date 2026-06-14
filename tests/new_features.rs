@@ -363,7 +363,7 @@ fn hybrid_differs_from_plain_attest() {
 #[test]
 fn ct_shake256_produces_output() {
     let mut out = [0u8; 32];
-    veil7::keccak_ct::ct_shake256(b"test-data", &mut out);
+    veil7::keccak_ct::ct_shake256(b"test-data", &mut out).unwrap();
     assert_ne!(out, [0u8; 32]);
 }
 

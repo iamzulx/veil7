@@ -67,6 +67,40 @@ pub(crate) fn zeroize_bytes(bytes: &mut [u8]) {
     compiler_fence(Ordering::SeqCst);
 }
 
+/// Wipe a raw memory range with volatile stores plus a compiler fence.
+///
+/// This is a safe wrapper around the unsafe volatile write operations.
+/// The caller must ensure `ptr` is valid for `len` bytes and that
+/// the memory is safe to write to (no aliasing violations).
+///
+/// This function is intentionally safe to call from modules that have
+/// `#![deny(unsafe_code)]` — the unsafe is encapsulated here in l0_memlock.
+#[inline(never)]
+pub(crate) fn zeroize_ptr(ptr: *mut u8, len: usize) {
+    compiler_fence(Ordering::SeqCst);
+    for i in 0..len {
+        // SAFETY: caller guarantees ptr is valid for len bytes.
+        unsafe {
+            core::ptr::write_volatile(ptr.add(i), 0);
+        }
+    }
+    compiler_fence(Ordering::SeqCst);
+}
+
+/// Wipe a byte slice in place using volatile stores.
+///
+/// This is a safe wrapper that obtains a mutable pointer from an immutable
+/// reference and wipes the memory. The caller must ensure the slice is
+/// the only reference to this memory (no aliasing).
+///
+/// This is used for wiping libcrux private key bytes where the API only
+/// provides immutable access to the underlying byte array.
+#[inline(never)]
+pub(crate) fn zeroize_slice(bytes: &[u8]) {
+    let ptr = bytes.as_ptr() as *mut u8;
+    zeroize_ptr(ptr, bytes.len());
+}
+
 /// Wipe a `u64` scalar with a volatile store plus a compiler fence.
 #[inline(never)]
 pub(crate) fn zeroize_u64(word: &mut u64) {

@@ -178,7 +178,7 @@ fn fuzz_ct_shake256_never_panics() {
     for i in 0..32usize {
         let data = random_vec(1 + (i % 128));
         let mut out = [0u8; 32];
-        veil7::keccak_ct::ct_shake256(&data, &mut out);
+        let _ = veil7::keccak_ct::ct_shake256(&data, &mut out);
     }
 }
 

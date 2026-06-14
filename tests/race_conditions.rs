@@ -555,7 +555,7 @@ fn race_keccak_ct_concurrent() {
 
     stress_test(n_threads, iterations, "keccak-ct", |_id| {
         let mut out = [0u8; 32];
-        veil7::keccak_ct::ct_shake256(b"race-test-data", &mut out);
+        veil7::keccak_ct::ct_shake256(b"race-test-data", &mut out).unwrap();
         assert_ne!(out, [0u8; 32]);
     });
     println!("  ✓ CtShake256 thread-safe");
@@ -701,7 +701,7 @@ fn race_mixed_workload() {
                     6 => {
                         // Keccak CT
                         let mut out = [0u8; 32];
-                        veil7::keccak_ct::ct_shake256(b"mixed-ct", &mut out);
+                        veil7::keccak_ct::ct_shake256(b"mixed-ct", &mut out).unwrap();
                     }
                     7 => {
                         // Threshold

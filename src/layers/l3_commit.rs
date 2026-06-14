@@ -21,8 +21,17 @@ use crate::shake256::Shake256;
 pub const COMMITMENT_LEN: usize = 32;
 
 /// A public, metadata-free commitment to (ephemeral identity + claim).
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Commitment(pub [u8; COMMITMENT_LEN]);
+
+impl core::fmt::Debug for Commitment {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        // Redact bytes to avoid leaking commitment material in logs/panics.
+        f.debug_struct("Commitment")
+            .field("bytes", &"[redacted]")
+            .finish()
+    }
+}
 
 impl Commitment {
     #[inline]

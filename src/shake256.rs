@@ -86,27 +86,19 @@ impl Shake256Reader {
     /// Read bytes from the XOF output.
     ///
     /// Fills `out` with bytes from the pre-computed buffer.
-    /// Panics if more than 256 bytes are requested (use `read_extended` for more).
+    /// If more bytes are requested than available, the output is truncated
+    /// to the available bytes (no panic). Callers should check `out.len()`
+    /// against their requested size.
     pub fn read(&mut self, out: &mut [u8]) {
-        assert!(
-            self.pos + out.len() <= self.out.len(),
-            "SHAKE256 reader: requested {} bytes but only {} available. Use read_extended() for >256 bytes.",
-            out.len(),
-            self.out.len() - self.pos
-        );
-        out.copy_from_slice(&self.out[self.pos..self.pos + out.len()]);
-        self.pos += out.len();
-    }
-
-    /// Read an arbitrary number of bytes by computing them on demand.
-    ///
-    /// For outputs > 256 bytes, this re-hashes with the full output length.
-    pub fn read_extended(&mut self, out: &mut [u8], original_data: &[u8]) {
-        if self.pos + out.len() <= self.out.len() {
-            self.read(out);
-        } else {
-            // Re-compute with full output length
-            libcrux_sha3::shake256_ema(out, original_data);
+        let available = self.out.len() - self.pos;
+        let to_copy = out.len().min(available);
+        out[..to_copy].copy_from_slice(&self.out[self.pos..self.pos + to_copy]);
+        self.pos += to_copy;
+        // Zero-fill any remaining bytes if caller requested more than available
+        if to_copy < out.len() {
+            for b in &mut out[to_copy..] {
+                *b = 0;
+            }
         }
     }
 }

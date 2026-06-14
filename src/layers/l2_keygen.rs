@@ -33,15 +33,18 @@ pub struct EphemeralKeys {
 impl Drop for EphemeralKeys {
     #[inline(never)]
     fn drop(&mut self) {
-        // Wipe all key material. The libcrux types don't have ZeroizeOnDrop,
-        // so we wipe the raw bytes manually via volatile writes.
-        // ML-KEM-768: private key is 2400 bytes, public key is 1184 bytes.
-        // ML-DSA-65: signing key is 4032 bytes, verification key is 1952 bytes.
-        // We access the raw byte arrays and zeroize them.
-        let kem_sk = self.kem_kp.private_key();
-        let mut sk_bytes: [u8; libcrux_backend::KEM_SK_SIZE] = *kem_sk.as_slice();
-        zeroize_bytes(&mut sk_bytes);
+        // Wipe all key material in place via unsafe mutable access.
+        // The libcrux types don't expose mutable access to private key bytes,
+        // so we use the l0_memlock::zeroize_ptr helper to zero them directly.
+        // This ensures the original bytes are wiped, not just a stack copy.
 
+        // ML-KEM-768: private key is 2400 bytes.
+        // Wipe via l0_memlock::zeroize_slice which obtains a mutable pointer
+        // from the immutable reference. The unsafe pointer cast is encapsulated
+        // in l0_memlock (the only module permitted to use unsafe).
+        crate::l0_memlock::zeroize_slice(self.kem_kp.private_key().as_slice());
+
+        // ML-DSA-65: signing key is 4032 bytes (mutable access available).
         let dsa_sk = &mut self.dsa_kp.signing_key;
         zeroize_bytes(dsa_sk.as_mut_slice());
     }

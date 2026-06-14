@@ -32,6 +32,7 @@ use crate::shake256::Shake256;
 pub struct CtShake256 {
     inner: Shake256,
     mask: [u8; 32],
+    call_counter: u64,
 }
 
 impl CtShake256 {
@@ -48,6 +49,7 @@ impl CtShake256 {
         Ok(Self {
             inner: Shake256::default(),
             mask,
+            call_counter: 0,
         })
     }
 
@@ -56,6 +58,7 @@ impl CtShake256 {
         Self {
             inner: Shake256::default(),
             mask,
+            call_counter: 0,
         }
     }
 
@@ -69,11 +72,14 @@ impl CtShake256 {
     /// for the masking.
     pub fn ct_update(&mut self, data: &[u8]) {
         // Generate a mask stream as long as the data from the base mask.
-        // This avoids the weakness of cycling a 32-byte mask over long inputs.
+        // The call_counter ensures each call produces a unique mask stream,
+        // preventing mask reuse attacks when ct_update is called multiple
+        // times with same-length inputs.
         let mut mask_stream = vec![0u8; data.len()];
         let mut mask_xof = Shake256::default();
         mask_xof.update(b"veil7:ct:mask-stream");
         mask_xof.update(&self.mask);
+        mask_xof.update(&self.call_counter.to_le_bytes());
         mask_xof.update(&(data.len() as u64).to_le_bytes());
         let mut reader = mask_xof.finalize_xof();
         reader.read(&mut mask_stream);
@@ -85,6 +91,9 @@ impl CtShake256 {
         self.inner.update(&masked);
         zeroize_bytes(&mut masked);
         zeroize_bytes(&mut mask_stream);
+
+        // Increment counter to ensure next call uses a different mask stream.
+        self.call_counter = self.call_counter.wrapping_add(1);
     }
 
     /// Absorb data WITHOUT masking (for public / non-secret data).
@@ -126,15 +135,6 @@ impl CtShake256 {
     }
 }
 
-impl Default for CtShake256 {
-    fn default() -> Self {
-        // Use a fixed non-zero mask constant. Default cannot call getrandom,
-        // so we use a well-known non-zero pattern to ensure the mask is never
-        // all-zeros (which would make masking a no-op).
-        Self::with_mask([0xA5; 32])
-    }
-}
-
 impl Drop for CtShake256 {
     #[inline(never)]
     fn drop(&mut self) {
@@ -146,17 +146,13 @@ impl Drop for CtShake256 {
 ///
 /// This is a convenience function for single-shot hashing where the
 /// output does not need to match standard SHAKE256 exactly.
+/// Returns `Err` if CSPRNG fails (no silent fallback to fixed mask).
 #[cfg(feature = "std")]
-pub fn ct_shake256(data: &[u8], out: &mut [u8]) {
-    let mut hasher = match CtShake256::new() {
-        Ok(h) => h,
-        Err(_) => {
-            // Fallback: use a non-zero fixed mask if CSPRNG fails.
-            CtShake256::with_mask([0xA5; 32])
-        }
-    };
+pub fn ct_shake256(data: &[u8], out: &mut [u8]) -> Result<(), crate::VeilError> {
+    let mut hasher = CtShake256::new()?;
     hasher.ct_update(data);
     hasher.ct_finalize(out);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -167,7 +163,7 @@ mod tests {
     #[cfg(feature = "std")]
     fn ct_shake256_produces_nonzero_output() {
         let mut out = [0u8; 32];
-        ct_shake256(b"test-data", &mut out);
+        ct_shake256(b"test-data", &mut out).unwrap();
         assert_ne!(out, [0u8; 32]);
     }
 
@@ -176,8 +172,8 @@ mod tests {
     fn ct_shake256_different_masks_different_outputs() {
         let mut out1 = [0u8; 32];
         let mut out2 = [0u8; 32];
-        ct_shake256(b"same-data", &mut out1);
-        ct_shake256(b"same-data", &mut out2);
+        ct_shake256(b"same-data", &mut out1).unwrap();
+        ct_shake256(b"same-data", &mut out2).unwrap();
         // Different random masks → different outputs.
         assert_ne!(out1, out2);
     }
