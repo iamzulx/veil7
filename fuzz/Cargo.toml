@@ -1,0 +1,103 @@
+[package]
+name = "veil7-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+veil7 = { path = ".." }
+subtle = "2"
+
+[[bin]]
+name = "fuzz_verify_once"
+path = "fuzz_targets/fuzz_verify_once.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_attest_bytes"
+path = "fuzz_targets/fuzz_attest_bytes.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_chain_root"
+path = "fuzz_targets/fuzz_chain_root.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_chain_verify"
+path = "fuzz_targets/fuzz_chain_verify.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_shake256"
+path = "fuzz_targets/fuzz_shake256.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_shamir"
+path = "fuzz_targets/fuzz_shamir.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_oram"
+path = "fuzz_targets/fuzz_oram.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_merkle"
+path = "fuzz_targets/fuzz_merkle.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_microvm"
+path = "fuzz_targets/fuzz_microvm.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_hash_preimage"
+path = "fuzz_targets/fuzz_hash_preimage.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_pedersen"
+path = "fuzz_targets/fuzz_pedersen.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_range_proof"
+path = "fuzz_targets/fuzz_range_proof.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_batch_verify"
+path = "fuzz_targets/fuzz_batch_verify.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_blind_attest"
+path = "fuzz_targets/fuzz_blind_attest.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_commit_reveal"
+path = "fuzz_targets/fuzz_commit_reveal.rs"
+test = false
+doc = false
