@@ -34,18 +34,27 @@ src/
   interface.rs        std-gated one-call facade (18 functions)
   chain.rs            tamper-evident event chain (no_std available)
   entropy_sources.rs  multi-method entropy harvest (6 independent sources)
+  shake256.rs         SHAKE256 wrapper around libcrux-sha3 (constant-time, no T-tables)
   blind.rs            blind attestation (engine never sees plaintext)
   commit_reveal.rs    two-phase commit-reveal protocol
   hybrid.rs           hybrid PQ+classical dual-layer attestation
-  keccak_ct.rs        constant-time masked SHAKE256 wrapper
-  shamir.rs           Shamir secret sharing for entropy splitting
+  keccak_ct.rs        defense-in-depth masked SHAKE256 wrapper
+  shamir.rs           Shamir secret sharing (constant-time GF(2^8))
   threshold.rs        N-of-M threshold verification
   common/             domain tags, error type, Fiat-Shamir transcript
   layers/             L0..L7 (entropy → zeroise → emit)
   relations/          Relation trait + hash_preimage, merkle, ml_dsa, pedersen, range_proof
-  pq_backends/        formal PQ signature backends (SLH-DSA, …)
+  pq_backends/        libcrux backend (ML-KEM/ML-DSA) + SLH-DSA + FALCON scaffold
   storage/            ORAM (ObliviousRAM + read_modify_write + swap)
   execution/          MicroVM (17-opcode stack machine + BytecodeBuilder)
+fuzz/
+  fuzz_targets/       15 fuzz targets (cargo-fuzz / libFuzzer)
+docs/
+  CRYPTO_POLICY.md    approved algorithms, key lifecycle, compliance
+  IAM_RBAC.md         roles, access control, separation of duties
+  KEY_INVENTORY.md    all key types, lifecycle, protection mechanisms
+  INCIDENT_RESPONSE.md classification, procedures, communication plan
+  MONITORING.md       metrics, alerting, Prometheus integration
 ```
 
 Seven layers, numbered by data-flow position in one iteration:
@@ -78,14 +87,14 @@ Five working relations ship as proof of generality:
 ## Dependencies policy
 
 Default approved:
-- `sha3` — SHAKE256
-- `getrandom` — OS entropy
+- `libcrux-sha3` — SHAKE256 (formally verified, constant-time, no T-tables)
+- `libcrux-ml-kem` — ML-KEM-768 (FIPS 203, hax/F* verified)
+- `libcrux-ml-dsa` — ML-DSA-65 (FIPS 204, hax/F* verified)
+- `slh-dsa` — SLH-DSA-SHAKE-128f (FIPS 205)
+- `getrandom` — OS entropy (optional, std feature)
 - `zeroize` — wipe secrets
 - `subtle` — constant-time
-- `ml-kem` — ML-KEM-768 (FIPS 203)
-- `ml-dsa` — ML-DSA-65 (FIPS 204)
-- `slh-dsa` — SLH-DSA-SHAKE-128f (FIPS 205)
-- `libc` — mlock/munlock syscalls
+- `libc` — mlock/munlock syscalls (optional, std feature)
 
 Never add without explicit approval:
 - logging/tracing crates
