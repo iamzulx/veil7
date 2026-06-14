@@ -17,8 +17,7 @@ use crate::{domain, VeilError};
 use libcrux_ml_dsa::ml_dsa_65::MLDSA65KeyPair;
 use libcrux_ml_kem::mlkem768::MlKem768KeyPair;
 
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-use sha3::Shake256;
+use crate::shake256::Shake256;
 
 /// Ephemeral post-quantum key material for a single verification iteration.
 ///
@@ -50,7 +49,7 @@ impl Drop for EphemeralKeys {
 
 /// Derive `N` bytes from the master seed under a domain tag via SHAKE256.
 ///
-/// SIDE-CHANNEL: `sha3::Shake256` is a T-table Keccak implementation. Per-call
+/// NOTE: SHAKE256 is now backed by libcrux-sha3 (formally verified, constant-time).
 /// lookup-table access patterns can leak the absorbed `seed` bytes on
 /// shared-cache hardware (co-resident VM / same-core L3). For this `derive()`
 /// call the absorbed material is the **locked master seed** — the highest-value

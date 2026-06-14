@@ -21,8 +21,7 @@
 //!
 //! [`chain_root`]: crate::chain::chain_root
 
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-use sha3::Shake256;
+use crate::shake256::Shake256;
 use subtle::{Choice, ConstantTimeEq};
 
 use crate::common::domain;

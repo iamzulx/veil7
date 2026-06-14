@@ -51,8 +51,7 @@
 
 use crate::common::domain;
 use crate::l0_memlock::zeroize_bytes;
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-use sha3::Shake256;
+use crate::shake256::Shake256;
 
 #[cfg(feature = "std")]
 use std::hash::{Hash, Hasher};
@@ -295,8 +294,7 @@ pub fn thread_id() -> EntropySource {
 ///     audit: avoid leaking raw input patterns into the whiten step.
 #[cfg(feature = "std")]
 pub fn hw_counter() -> EntropySource {
-    use sha3::digest::{ExtendableOutput, Update, XofReader};
-    use sha3::Shake256;
+    use crate::shake256::Shake256;
 
     let elapsed_nanos = std::time::Instant::now().elapsed().as_nanos();
     let wall_nanos = std::time::SystemTime::now()

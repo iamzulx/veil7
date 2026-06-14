@@ -13,8 +13,7 @@
 //!   bus traffic to write.
 //! - All slots zeroized on drop.
 
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-use sha3::Shake256;
+use crate::shake256::Shake256;
 
 use crate::l0_memlock::zeroize_bytes;
 

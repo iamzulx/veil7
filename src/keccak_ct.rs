@@ -1,35 +1,20 @@
-//! Constant-time Keccak wrapper — closes the T-table side-channel gap.
+//! Constant-time Keccak wrapper — defense-in-depth masking layer.
 //!
-//! The `sha3` crate (RustCrypto) uses T-table lookups for Keccak, which
-//! creates a cache-timing side channel on shared-cache hardware. This
-//! module provides a portable constant-time alternative using bit-sliced
-//! operations that do not depend on lookup tables.
+//! **Update (Phase 2.1):** SHAKE256 is now backed by **libcrux-sha3** which
+//! is formally verified (hax/F*) and uses a generic Keccak implementation
+//! with no T-tables. The T-table side-channel gap is now **closed** at the
+//! base level.
 //!
-//! ## Approach
-//! Instead of a full bit-sliced Keccak (which requires thousands of lines
-//! and careful SIMD tuning), this module uses a **masked sponge** approach:
+//! This module provides an additional **masked sponge** layer as
+//! defense-in-depth:
 //!
 //! 1. Before each absorb, XOR the input with a random mask.
-//! 2. Feed the masked input through the standard `sha3` crate.
-//! 3. The T-table access pattern now leaks the *masked* input, not the
-//!    original secret. Without the mask, the cache-timing information
-//!    is useless to an attacker.
+//! 2. Feed the masked input through libcrux-sha3 (already constant-time).
+//! 3. The mask adds a second layer of protection beyond libcrux's own CT.
 //! 4. The mask is derived from a per-call random nonce, wiped after use.
 //!
-//! This is a **practical mitigation** that preserves the existing `sha3`
-//! dependency while neutralizing the T-table timing leak. It does not
-//! require a custom Keccak implementation.
-//!
-//! ## Limitations
-//! - The mask adds ~1 SHAKE256 call per absorb (performance cost ~2x).
-//! - The masking is applied at the absorb boundary only; the internal
-//!   Keccak permutation still uses T-tables (but operates on masked data).
-//! - This is NOT a formal proof of constant-time; it is an empirical
-//!   side-channel mitigation.
-//!
 //! ## Philosophy alignment
-//! - **Silence over explanation**: the engine should not leak secrets
-//!   through any channel, including cache timing.
+//! - **Silence over explanation**: defense-in-depth even when base is CT.
 //! - **Wipe outside boundary**: masks are wiped after use.
 //! - **Math over abstraction**: XOR masking is simple, auditable math.
 
@@ -38,8 +23,7 @@ use alloc::vec;
 
 use crate::l0_memlock::zeroize_bytes;
 
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-use sha3::Shake256;
+use crate::shake256::Shake256;
 
 /// A constant-time SHAKE256 hasher that masks inputs before absorbing.
 ///

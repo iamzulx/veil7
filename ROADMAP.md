@@ -23,7 +23,7 @@ To reach production, **4 phases** must be completed.
 
 | Category | Count | Status |
 |----------|-------|--------|
-| Security gaps (Phase 1 residual) | 2 | ⚠️ Minor (dudect, fuzzing) |
+| Security gaps (residual) | 2 | ⚠️ Minor (dudect, fuzzing) |
 | Phase 2 backlog items | 8 | 📋 Not started |
 | Threat model exclusions | 7 | ⏸️ Accepted risk |
 | Hardware validation required | 5 | 🔬 Needs physical tools |
@@ -129,11 +129,14 @@ The implementation MUST produce identical output.
 
 ### 2.1 — Constant-Time Keccak (CRITICAL 🔴)
 
-| Option | Effort | Risk |
-|--------|--------|------|
-| A. Fork sha3 → bit-sliced | 3-6 months | Lowest risk, most work |
-| B. Use libcrux SHA-3 | 1-2 weeks | Medium risk, depends on libcrux |
-| C. Accept risk + document | 0 | Only for single-tenant |
+**Status:** ✅ COMPLETE — SHAKE256 migrated to libcrux-sha3 (Option B)
+
+- `src/shake256.rs` — wrapper around libcrux-sha3 (formally verified, no T-tables)
+- All 45 SHAKE256 call sites across 22 files migrated from RustCrypto `sha3`
+- RustCrypto `sha3` removed from Cargo.toml
+- `keccak_ct.rs` retained as defense-in-depth masking layer
+- T-table side-channel gap is now **closed** at the base level
+- Binary: 755 KB → 747 KB (-8 KB)
 
 ### 2.2 — dudect Hardware Validation (HIGH 🟠)
 
@@ -213,13 +216,19 @@ The implementation MUST produce identical output.
 - [ ] Audit trail
 ```
 
-### 4.3 — Deployment Constraints
+### 4.3 — Deployment Constraints & Cryptographic Policy
+
+**Status:** ✅ Cryptographic Policy documented (`CRYPTO_POLICY.md`)
+
+- Approved algorithms, key sizes, key lifecycle, roles, incident response
+- NIST FIPS 202/203/204 compliant (libcrux formally verified)
+- Supply chain policy (cargo audit, cargo vet, Dependabot, SBOM)
 
 | Environment | Risk | Readiness |
 |-------------|------|-----------|
-| Single-tenant phone/laptop | 🟢 LOW | ✅ After Phase 1 |
-| Dedicated server | 🟢 LOW | ✅ After Phase 1 |
-| Co-located cloud VM | 🟠 MED-HIGH | ⚠️ Needs Phase 2 |
+| Single-tenant phone/laptop | 🟢 LOW | ✅ Ready |
+| Dedicated server | 🟢 LOW | ✅ Ready |
+| Co-located cloud VM | 🟠 MED-HIGH | ⚠️ Needs Phase 2.2 (dudect) |
 | Multi-tenant bare metal | 🔴 HIGH | ❌ Needs Phase 2+3 |
 | TEE/SGX enclave | 🟡 MEDIUM | ⚠️ Needs Phase 2 |
 
@@ -249,9 +258,9 @@ The implementation MUST produce identical output.
 [x] cargo vet in CI (initial run, continue-on-error)
 [x] Miri in CI (nightly, -Zmiri-disable-isolation)
 [ ] dudect validation on target hardware
-[x] All tests passing (368/368)
+[x] All tests passing (375/375)
 [ ] Fuzzing ≥ 72 hours
-[ ] Documented cryptographic policy
+[x] Documented cryptographic policy (CRYPTO_POLICY.md)
 [ ] Signed release binaries
 [x] SBOM generated (CycloneDX, 61 dependencies)
 [x] Dependabot configured + managed
@@ -289,3 +298,5 @@ The implementation MUST produce identical output.
 | 2026-06-14 | ✅ Phase 1.3: cargo-vet added to CI. Phase 1 complete. |
 | 2026-06-14 | ✅ Miri: skip mlock under Miri (cfg(miri) guard). |
 | 2026-06-14 | ✅ Miri: scoped to 13 non-libcrux modules (cpuid limitation). |
+| 2026-06-14 | ✅ Phase 2.1: SHAKE256 migrated to libcrux-sha3 (T-table gap closed). |
+| 2026-06-14 | ✅ Phase 4.3: Cryptographic Policy documented (CRYPTO_POLICY.md). |

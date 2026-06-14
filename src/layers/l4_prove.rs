@@ -14,8 +14,7 @@ use crate::VeilError;
 
 use libcrux_ml_dsa::ml_dsa_65::MLDSA65Signature;
 
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-use sha3::Shake256;
+use crate::shake256::Shake256;
 
 /// Context string bound into the ML-DSA signature (FIPS 204 ctx field).
 /// Acts as an additional domain separator at the signature layer.

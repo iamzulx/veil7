@@ -18,8 +18,7 @@
 use crate::domain;
 use crate::l3_commit::Commitment;
 
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-use sha3::Shake256;
+use crate::shake256::Shake256;
 use subtle::Choice;
 
 use core::fmt::Write;

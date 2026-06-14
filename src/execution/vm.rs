@@ -37,8 +37,7 @@
 //! - Invalid opcodes, empty code, and oversized bytecode all fail-closed.
 //! - Maximum 4096 bytes of bytecode (≈512 Push instructions).
 
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-use sha3::Shake256;
+use crate::shake256::Shake256;
 
 use crate::l0_memlock::zeroize_u64;
 

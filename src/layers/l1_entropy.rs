@@ -42,11 +42,8 @@
 use crate::l0_memlock::zeroize_bytes;
 use crate::l0_memlock::Locked;
 #[cfg(feature = "std")]
+use crate::shake256::Shake256;
 use crate::{domain, VeilError};
-#[cfg(feature = "std")]
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-#[cfg(feature = "std")]
-use sha3::Shake256;
 
 /// Width of the master seed handed to L2. 64 bytes = 512 bits of stretched
 /// entropy, enough to seed both PQ key derivations with independent halves.

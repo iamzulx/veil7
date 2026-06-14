@@ -38,9 +38,8 @@ use crate::l7_emit::Verdict;
 use crate::pipeline::Claim;
 use crate::VeilError;
 
+use crate::shake256::Shake256;
 use core::sync::atomic::{compiler_fence, Ordering};
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-use sha3::Shake256;
 
 /// Domain tags for hybrid framing.
 const HYBRID_MAC: &[u8] = b"veil7:hybrid:mac:v1";

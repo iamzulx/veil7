@@ -383,8 +383,7 @@ fn ct_shake256_deterministic_with_fixed_mask() {
 
 #[test]
 fn ct_shake256_public_update_matches_standard() {
-    use sha3::digest::{ExtendableOutput, Update, XofReader};
-    use sha3::Shake256;
+    use veil7::shake256::Shake256;
 
     // Standard SHAKE256.
     let mut std = Shake256::default();

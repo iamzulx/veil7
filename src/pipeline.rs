@@ -278,8 +278,8 @@ pub fn verify_batch(claims: &[Claim<'_>]) -> Result<Verdict, VeilError> {
     }
 
     let mut all_valid = subtle::Choice::from(1u8);
-    let mut batch_xof = sha3::Shake256::default();
-    use sha3::digest::{ExtendableOutput, Update, XofReader};
+    let mut batch_xof = Shake256::default();
+    use crate::shake256::Shake256;
     batch_xof.update(crate::common::domain::BATCH_HEAD);
 
     for (i, claim) in claims.iter().enumerate() {

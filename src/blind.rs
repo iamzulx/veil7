@@ -40,8 +40,7 @@ use crate::pipeline::{verify_once, Claim};
 use crate::VeilError;
 use crate::Verdict;
 
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-use sha3::Shake256;
+use crate::shake256::Shake256;
 
 /// Domain tags for blind framing.
 const BLIND_MASK: &[u8] = b"veil7:blind:mask:v1";

@@ -194,8 +194,7 @@ fn real_data_chain_root_matches_expected_framing() {
     let root = chain_root(events).expect("non-empty");
 
     // Independent re-derivation using the documented domain tags.
-    use sha3::digest::{ExtendableOutput, Update, XofReader};
-    use sha3::Shake256;
+    use veil7::shake256::Shake256;
     let mut xof = Shake256::default();
     xof.update(veil7::common::domain::CHAIN_HEAD);
     for ev in events {

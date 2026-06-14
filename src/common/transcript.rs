@@ -22,8 +22,7 @@
 //! land on the same challenge.
 
 use crate::common::domain;
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-use sha3::Shake256;
+use crate::shake256::Shake256;
 
 const STATE_LEN: usize = 64;
 

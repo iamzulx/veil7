@@ -15,8 +15,7 @@ use crate::domain;
 use crate::l2_keygen::EphemeralKeys;
 use crate::pq_backends::libcrux_backend;
 
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-use sha3::Shake256;
+use crate::shake256::Shake256;
 
 /// Length of the commitment digest in bytes (256-bit).
 pub const COMMITMENT_LEN: usize = 32;
@@ -34,7 +33,7 @@ impl Commitment {
 
 /// Compute the commitment for a claim under the given ephemeral keys.
 ///
-/// SIDE-CHANNEL: `sha3::Shake256` is a T-table Keccak. The absorbed `claim`
+/// NOTE: SHAKE256 is now backed by libcrux-sha3 (formally verified, constant-time). The absorbed `claim`
 /// is a **secret** for the engine (only the commitment leaks). On shared-cache
 /// hardware an attacker can recover `claim` bytes from the T-table access
 /// pattern. See `SPEC-HARDENING.md` §"Cache timing and T-table side channels".

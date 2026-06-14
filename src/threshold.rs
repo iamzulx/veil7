@@ -25,8 +25,7 @@ use crate::l7_emit::Verdict;
 use crate::pipeline::{verify_once, Claim};
 use crate::VeilError;
 
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-use sha3::Shake256;
+use crate::shake256::Shake256;
 use subtle::Choice;
 
 use core::sync::atomic::{compiler_fence, Ordering};

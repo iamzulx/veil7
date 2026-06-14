@@ -34,9 +34,8 @@ use crate::relations::Relation;
 
 use libcrux_ml_dsa::ml_dsa_65::{MLDSA65Signature, MLDSA65VerificationKey};
 
+use crate::shake256::Shake256;
 use core::sync::atomic::{compiler_fence, Ordering};
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-use sha3::Shake256;
 use subtle::Choice;
 
 /// Protocol label binding the transcript to this relation.

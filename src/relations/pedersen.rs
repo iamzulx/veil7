@@ -35,9 +35,8 @@ use crate::common::{domain, Transcript, VeilError};
 use crate::l0_memlock::zeroize_bytes;
 use crate::relations::Relation;
 
+use crate::shake256::Shake256;
 use core::sync::atomic::{compiler_fence, Ordering};
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-use sha3::Shake256;
 use subtle::{Choice, ConstantTimeEq};
 
 /// Bytes per component (value and blinding).

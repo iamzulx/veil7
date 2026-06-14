@@ -19,8 +19,7 @@ use crate::l4_prove::{sig_ctx, Proof};
 use crate::pq_backends::libcrux_backend;
 use crate::VeilError;
 
-use sha3::digest::{ExtendableOutput, Update, XofReader};
-use sha3::Shake256;
+use crate::shake256::Shake256;
 use subtle::{Choice, ConstantTimeEq};
 
 /// Pluggable verification scheme. Mirror of `Prover`.
@@ -169,7 +168,7 @@ mod tests {
         let c = crate::l3_commit::commit(&keys, b"hello");
 
         // Reproduce the KEM round-trip from the verifier.
-        let mut xof = sha3::Shake256::default();
+        let mut xof = Shake256::default();
         xof.update(crate::domain::KEM_ENCAP_COINS);
         xof.update(c.as_bytes());
         let mut m = [0u8; 32];

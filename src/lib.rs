@@ -37,6 +37,7 @@ pub mod layers;
 pub mod pipeline;
 pub mod pq_backends;
 pub mod relations;
+pub mod shake256;
 pub mod shamir;
 pub mod storage;
 pub mod threshold;

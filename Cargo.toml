@@ -33,8 +33,8 @@ libcrux-ml-dsa = { version = "0.0.9", features = ["mldsa65"] } # ML-DSA-65  (FIP
 # --- PQ signature backend (RustCrypto, awaiting stable release) ---
 slh-dsa = { version = "0.2.0-rc.5", default-features = false, features = ["zeroize"] }  # SLH-DSA-SHAKE-128f (FIPS 205)
 
-# --- Hashing / XOF (post-quantum sound, domain separation) ---
-sha3 = "0.10"   # SHAKE256 XOF
+# --- Hashing / XOF (formally verified, constant-time) ---
+libcrux-sha3 = "0.0.9"  # SHAKE256 XOF (libcrux, hax/F* verified, no T-tables)
 
 # --- Memory hygiene + constant-time ---
 zeroize = { version = "1", features = ["derive"] }
