@@ -69,7 +69,7 @@ pub fn hybrid_attest(claim: &Claim<'_>) -> Result<Verdict, VeilError> {
         xof.update(HYBRID_KEY);
         xof.update(seed.as_bytes());
         let mut reader = xof.finalize_xof();
-        let _ = reader.read(&mut mac_key);
+        reader.read(&mut mac_key);
     }
 
     // Seed is no longer needed.
@@ -91,7 +91,7 @@ pub fn hybrid_attest(claim: &Claim<'_>) -> Result<Verdict, VeilError> {
     mac_xof.update(claim.bytes);
     let mut mac = [0u8; 32];
     let mut mac_reader = mac_xof.finalize_xof();
-    let _ = mac_reader.read(&mut mac);
+    mac_reader.read(&mut mac);
 
     // Verify MAC (recompute and compare — always valid for honest input).
     let mut verify_xof = Shake256::default();
@@ -100,7 +100,7 @@ pub fn hybrid_attest(claim: &Claim<'_>) -> Result<Verdict, VeilError> {
     verify_xof.update(claim.bytes);
     let mut mac_check = [0u8; 32];
     let mut verify_reader = verify_xof.finalize_xof();
-    let _ = verify_reader.read(&mut mac_check);
+    verify_reader.read(&mut mac_check);
 
     use subtle::ConstantTimeEq;
     let classical_valid = mac.ct_eq(&mac_check);
@@ -121,7 +121,7 @@ pub fn hybrid_attest(claim: &Claim<'_>) -> Result<Verdict, VeilError> {
     bind_xof.update(commitment.as_bytes());
     let mut transcript = [0u8; 32];
     let mut bind_reader = bind_xof.finalize_xof();
-    let _ = bind_reader.read(&mut transcript);
+    bind_reader.read(&mut transcript);
 
     let verdict = Verdict::from_batch(combined, &transcript);
 

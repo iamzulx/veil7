@@ -863,11 +863,24 @@ mod tests {
         let f1 = dir.join("file1.txt");
         let f2 = dir.join("file2.txt");
         let f3 = dir.join("file3.txt");
-        std::fs::File::create(&f1).unwrap().write_all(b"file one").unwrap();
-        std::fs::File::create(&f2).unwrap().write_all(b"file two").unwrap();
-        std::fs::File::create(&f3).unwrap().write_all(b"file three").unwrap();
+        std::fs::File::create(&f1)
+            .unwrap()
+            .write_all(b"file one")
+            .unwrap();
+        std::fs::File::create(&f2)
+            .unwrap()
+            .write_all(b"file two")
+            .unwrap();
+        std::fs::File::create(&f3)
+            .unwrap()
+            .write_all(b"file three")
+            .unwrap();
 
-        let paths = [f1.to_str().unwrap(), f2.to_str().unwrap(), f3.to_str().unwrap()];
+        let paths = [
+            f1.to_str().unwrap(),
+            f2.to_str().unwrap(),
+            f3.to_str().unwrap(),
+        ];
         let v = attest_file_merkle(&paths).unwrap();
         assert!(v.is_valid_bool());
 
@@ -895,8 +908,14 @@ mod tests {
 
         let f1 = dir.join("det1.txt");
         let f2 = dir.join("det2.txt");
-        std::fs::File::create(&f1).unwrap().write_all(b"deterministic").unwrap();
-        std::fs::File::create(&f2).unwrap().write_all(b"test data").unwrap();
+        std::fs::File::create(&f1)
+            .unwrap()
+            .write_all(b"deterministic")
+            .unwrap();
+        std::fs::File::create(&f2)
+            .unwrap()
+            .write_all(b"test data")
+            .unwrap();
 
         let paths = [f1.to_str().unwrap(), f2.to_str().unwrap()];
         // Merkle root is deterministic, but transcripts differ (ephemeral keys).
@@ -921,8 +940,14 @@ mod tests {
 
         let f1 = dir1.join("file.txt");
         let f2 = dir2.join("file.txt");
-        std::fs::File::create(&f1).unwrap().write_all(b"content A").unwrap();
-        std::fs::File::create(&f2).unwrap().write_all(b"content B").unwrap();
+        std::fs::File::create(&f1)
+            .unwrap()
+            .write_all(b"content A")
+            .unwrap();
+        std::fs::File::create(&f2)
+            .unwrap()
+            .write_all(b"content B")
+            .unwrap();
 
         let paths1 = [f1.to_str().unwrap()];
         let paths2 = [f2.to_str().unwrap()];
@@ -947,7 +972,10 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
 
         let f1 = dir.join("valid.txt");
-        std::fs::File::create(&f1).unwrap().write_all(b"valid content").unwrap();
+        std::fs::File::create(&f1)
+            .unwrap()
+            .write_all(b"valid content")
+            .unwrap();
 
         let paths = [f1.to_str().unwrap(), "/nonexistent/file.txt"];
         assert!(attest_file_merkle(&paths).is_err());

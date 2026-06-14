@@ -336,7 +336,7 @@ impl MicroVM {
         // Derive final root from execution trace via SHAKE256.
         let mut root = [0u8; 64];
         let mut reader = trace.finalize_xof();
-        let _ = reader.read(&mut root);
+        reader.read(&mut root);
 
         // Wipe execution state.
         self.wipe_state();

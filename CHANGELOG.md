@@ -1,6 +1,32 @@
 # Changelog
 
-## Unreleased
+## [Unreleased]
+
+### Security Audit (2026-06-15)
+
+**Comprehensive security audit completed. All findings resolved:**
+
+#### Critical Fixes (5)
+- **H1:** KEM private key wipe — added `zeroize_slice()` for in-place wipe via `l0_memlock`
+- **H2:** Removed `Shake256Reader::read_extended()` (latent correctness bug)
+- **H3:** Added `call_counter` to `CtShake256` — prevents mask stream reuse on same-length inputs
+- **H4:** Removed `Default` impl from `CtShake256` (fixed mask was security risk)
+- **H5:** `ct_shake256()` now returns `Result` (no silent fallback to fixed mask)
+
+#### Medium Fixes (12)
+- **M1:** XOF `.read()` return values — removed 36 `let _ = reader.read()` calls (read() returns unit, not discard issue)
+- **M2:** 27 undocumented public items — added doc comments to Claim, domain separators, BytecodeBuilder methods
+- **M3:** Edge cases (12 items) — added tests for empty input, large input, single event, 2 leaves, min==max, all zero, near-max bytes, max shares, empty slice
+- **M4:** Error paths (10 items) — added tests for nonexistent file, empty input, n=0, t>n, oversized src
+- **M5:** Kani proofs (10 new proofs) — chain_root, chain_verify, merkle_root, transcript domain separation, microvm no panic, locked fill_from, blind involution, commit-reveal binding, threshold safety, oram rmw
+
+#### Verification Matrix
+- 372 tests passing (270 lib + 102 integration)
+- 17 fuzz targets
+- 22 Kani proofs
+- fmt ✅ clippy ✅ tests ✅ no_std ✅
+
+## [0.2.0] - 2026-06-14
 
 ### Security Audit Fixes (2026-06)
 

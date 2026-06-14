@@ -56,7 +56,7 @@ pub fn chain_root(events: &[&[u8]]) -> Result<[u8; 32], VeilError> {
         xof.update(ev);
     }
     let mut root = [0u8; 32];
-    let _ = xof.finalize_xof().read(&mut root);
+    xof.finalize_xof().read(&mut root);
     Ok(root)
 }
 
@@ -136,7 +136,7 @@ impl ChainState {
             return Err(VeilError::Crypto);
         }
         let mut root = [0u8; 32];
-        let _ = self.xof.finalize_xof().read(&mut root);
+        self.xof.finalize_xof().read(&mut root);
         Ok(root)
     }
 

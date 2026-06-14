@@ -298,7 +298,7 @@ pub fn verify_batch(claims: &[Claim<'_>]) -> Result<Verdict, VeilError> {
     // Derive the batch transcript (32 bytes).
     let mut batch_transcript = [0u8; 32];
     let mut reader = batch_xof.finalize_xof();
-    let _ = reader.read(&mut batch_transcript);
+    reader.read(&mut batch_transcript);
 
     Ok(Verdict::from_batch(all_valid, &batch_transcript))
 }

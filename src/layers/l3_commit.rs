@@ -59,7 +59,7 @@ pub fn commit(keys: &EphemeralKeys, claim: &[u8]) -> Commitment {
 
     let mut out = [0u8; COMMITMENT_LEN];
     let mut reader = xof.finalize_xof();
-    let _ = reader.read(&mut out);
+    reader.read(&mut out);
     Commitment(out)
 }
 

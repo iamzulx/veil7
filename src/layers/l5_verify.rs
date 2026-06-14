@@ -83,7 +83,7 @@ fn kem_roundtrip(keys: &EphemeralKeys, commitment: &Commitment) -> Result<Choice
     xof.update(commitment.as_bytes());
     let mut m = [0u8; 32];
     let mut reader = xof.finalize_xof();
-    let _ = reader.read(&mut m);
+    reader.read(&mut m);
 
     // Encapsulate (deterministic) -> (ciphertext, shared secret sender side).
     let (ct, ss_send) = libcrux_backend::kem_encapsulate(keys.kem_kp.public_key(), m);

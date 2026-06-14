@@ -132,7 +132,7 @@ mod tests {
         xof.update(b"world");
         let mut out = [0u8; 32];
         let mut reader = xof.finalize_xof();
-        let _ = reader.read(&mut out);
+        reader.read(&mut out);
 
         let expected: [u8; 32] = shake256(b"hello world");
         assert_eq!(out, expected, "incremental must match one-shot");

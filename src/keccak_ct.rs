@@ -82,7 +82,7 @@ impl CtShake256 {
         mask_xof.update(&self.call_counter.to_le_bytes());
         mask_xof.update(&(data.len() as u64).to_le_bytes());
         let mut reader = mask_xof.finalize_xof();
-        let _ = reader.read(&mut mask_stream);
+        reader.read(&mut mask_stream);
 
         let mut masked = data.to_vec();
         for (i, b) in masked.iter_mut().enumerate() {
@@ -123,7 +123,7 @@ impl CtShake256 {
         // Take ownership of the inner hasher by replacing with a fresh one.
         let inner = core::mem::take(&mut self.inner);
         let mut reader = inner.finalize_xof();
-        let _ = reader.read(out);
+        reader.read(out);
         zeroize_bytes(&mut self.mask);
     }
 

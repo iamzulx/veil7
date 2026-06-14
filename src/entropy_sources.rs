@@ -121,7 +121,7 @@ impl EntropySource {
         xof.update(self.domain_tag);
         xof.update(&self.raw);
         let mut out = [0u8; SOURCE_LEN];
-        let _ = xof.finalize_xof().read(&mut out);
+        xof.finalize_xof().read(&mut out);
         out
     }
 
@@ -307,7 +307,7 @@ pub fn hw_counter() -> EntropySource {
     xof.update(b"veil7:L1:src:hw-counter-combine:v1");
     xof.update(&elapsed_nanos.to_le_bytes());
     xof.update(&wall_nanos.to_le_bytes());
-    let _ = xof.finalize_xof().read(&mut raw);
+    xof.finalize_xof().read(&mut raw);
 
     EntropySource::from_raw("hw_counter", domain::ENTROPY_SOURCE_HW_COUNTER, raw)
 }

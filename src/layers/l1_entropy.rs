@@ -147,7 +147,7 @@ fn mix_round(i: usize, personalization: &[u8], pool: &mut [u8; SEED_LEN]) -> Res
         xof.update(personalization);
         xof.update(&os_bytes);
         xof.update(&jit);
-        let _ = xof.finalize_xof().read(&mut h1);
+        xof.finalize_xof().read(&mut h1);
     }
 
     // 3. Slice — first 32 bytes and last 32 bytes.
@@ -163,7 +163,7 @@ fn mix_round(i: usize, personalization: &[u8], pool: &mut [u8; SEED_LEN]) -> Res
         xof.update(domain::ENTROPY_FOLD);
         xof.update(&counter);
         xof.update(half1);
-        let _ = xof.finalize_xof().read(&mut h2);
+        xof.finalize_xof().read(&mut h2);
     }
 
     // 5. Fold into the pool: rehashed-half1 → pool[..32], raw-half2 → pool[32..].
