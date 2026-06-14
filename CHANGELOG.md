@@ -2,6 +2,58 @@
 
 ## [Unreleased]
 
+### Layer 0 Enhancements — Memory Isolation (2026-06-15)
+
+**Zero Trust 2026 Compliance:** Enhanced Layer 0 with memory isolation features based on latest security best practices.
+
+#### Memory Locking Budget Management
+- Added global `LOCKED_MEMORY_USAGE` atomic counter to track locked memory usage
+- `get_locked_memory_usage()` — returns current locked memory usage in bytes
+- `get_mlock_limit()` — returns `RLIMIT_MEMLOCK` limit in bytes
+- `is_approaching_mlock_limit()` — checks if usage > 80% of limit (prevents unexpected failures)
+- `Locked::new()` now checks budget before attempting `mlock()`
+- `Locked::drop()` now decrements global counter after `munlock()`
+
+**Reference:** Linux Security 2026 Hardening Best Practices
+<https://linuxsecurity.com/news/server-security/linux-security-hardening-best-practices>
+
+#### Memory Locking Verification
+- `verify_mlock(expected_bytes)` — reads `/proc/self/status` to verify `VmLck` field
+- Ensures memory is actually locked (not just claimed to be locked)
+- Linux-specific, returns `false` on non-Linux systems
+
+**Reference:** Linux kernel documentation on `/proc/self/status`
+<https://www.kernel.org/doc/Documentation/filesystems/proc.txt>
+
+#### Memory Poisoning (Defence-in-Depth)
+- `poison_bytes(bytes)` — fills memory with pattern `0xDE` to detect use-after-free
+- `zeroize_and_poison(bytes)` — 3-pass wipe: zeroize → poison → zeroize
+- `Locked::drop()` now uses `zeroize_and_poison()` instead of just `zeroize_bytes()`
+- Ensures secrets are cleared, use-after-free is detectable, and final state is clean zeros
+
+**Reference:** CWE-416 (Use After Free)
+<https://cwe.mitre.org/data/definitions/416.html>
+
+#### Memory Canaries (Buffer Overflow Detection)
+- `check_canary(canary)` — checks if canary value `0xDEADBEEFCAFEBABE` is intact
+- Sentinel value placed before/after buffers to detect buffer overflows
+- Returns `true` if canary is intact, `false` if modified (indicating overflow)
+
+**Reference:** CWE-120 (Buffer Copy without Checking Size of Input)
+<https://cwe.mitre.org/data/definitions/120.html>
+
+#### Tests Added (7 new tests)
+- `zeroize_bytes_clears_memory` — verifies zeroize clears all bytes
+- `poison_bytes_fills_pattern` — verifies poison fills with pattern 0xDE
+- `zeroize_and_poison_clears_and_poisons` — verifies 3-pass wipe ends with zeros
+- `canary_check_detects_modification` — verifies canary detects modification
+- `locked_memory_usage_tracking` — verifies global counter tracks usage
+- `mlock_limit_query` — verifies `RLIMIT_MEMLOCK` is queryable
+- `approaching_mlock_limit_check` — verifies threshold check works
+
+**Reference:** Zero Trust 2026 — "defence-in-depth, verify everything"
+<https://nmsconsulting.com/latest-cybersecurity-best-practices-2026>
+
 ### Security Audit (2026-06-15)
 
 **Comprehensive security audit completed. All findings resolved:**

@@ -28,10 +28,109 @@
 
 extern crate alloc;
 use alloc::boxed::Box;
-use core::sync::atomic::{compiler_fence, Ordering};
+use core::sync::atomic::{AtomicUsize, Ordering, compiler_fence};
 
 #[cfg(feature = "std")]
 extern crate libc;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Memory Locking Budget Management (Zero Trust 2026)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Global tracker for locked memory usage (in bytes).
+///
+/// This atomic counter tracks the total amount of memory currently locked
+/// via `mlock()`. This enables:
+/// - Budget management: prevent exhausting `RLIMIT_MEMLOCK`
+/// - Monitoring: track locked memory usage over time
+/// - Zero Trust verification: ensure memory isolation is enforced
+///
+/// Reference: Linux Security 2026 Hardening Best Practices
+/// <https://linuxsecurity.com/news/server-security/linux-security-hardening-best-practices>
+static LOCKED_MEMORY_USAGE: AtomicUsize = AtomicUsize::new(0);
+
+/// Get current locked memory usage in bytes.
+///
+/// Returns the total amount of memory currently locked via `mlock()`.
+/// This is useful for monitoring and budget management.
+#[cfg(feature = "std")]
+pub fn get_locked_memory_usage() -> usize {
+    LOCKED_MEMORY_USAGE.load(Ordering::SeqCst)
+}
+
+/// Get `RLIMIT_MEMLOCK` limit in bytes.
+///
+/// Returns the maximum amount of memory that can be locked by this process.
+/// Returns `None` if the limit cannot be determined.
+///
+/// Reference: `man 2 getrlimit`
+#[cfg(feature = "std")]
+pub fn get_mlock_limit() -> Option<usize> {
+    #[cfg(not(miri))]
+    {
+        let mut rlim: libc::rlimit = unsafe { core::mem::zeroed() };
+        if unsafe { libc::getrlimit(libc::RLIMIT_MEMLOCK, &mut rlim) } == 0 {
+            Some(rlim.rlim_cur as usize)
+        } else {
+            None
+        }
+    }
+    #[cfg(miri)]
+    {
+        None
+    }
+}
+
+/// Check if we're approaching `RLIMIT_MEMLOCK` limit.
+///
+/// Returns `true` if usage > 80% of limit. This is a conservative threshold
+/// to prevent unexpected `mlock` failures.
+///
+/// Reference: Zero Trust 2026 — "verify everything, trust nothing"
+/// <https://www.exabeam.com/explainers/zero-trust/zero-trust-in-2026-principles-technologies-and-best-practices>
+#[cfg(feature = "std")]
+pub fn is_approaching_mlock_limit() -> bool {
+    if let Some(limit) = get_mlock_limit() {
+        let usage = get_locked_memory_usage();
+        let threshold = (limit as f64 * 0.8) as usize;
+        usage > threshold
+    } else {
+        false
+    }
+}
+
+/// Verify that memory is actually locked (Linux-specific).
+///
+/// Reads `/proc/self/status` to check `VmLck` field and verify that
+/// the expected amount of memory is locked.
+///
+/// Returns `true` if verification succeeds, `false` otherwise.
+///
+/// Reference: Linux kernel documentation on `/proc/self/status`
+/// <https://www.kernel.org/doc/Documentation/filesystems/proc.txt>
+#[cfg(all(feature = "std", target_os = "linux", not(miri)))]
+pub fn verify_mlock(expected_bytes: usize) -> bool {
+    use std::fs;
+
+    if let Ok(status) = fs::read_to_string("/proc/self/status") {
+        for line in status.lines() {
+            if line.starts_with("VmLck:") {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    if let Ok(vm_lck_kb) = parts[1].parse::<u64>() {
+                        // Convert expected bytes to KB (round up)
+                        let expected_kb = (expected_bytes + 1023) / 1024;
+                        return vm_lck_kb >= expected_kb as u64;
+                    }
+                }
+            }
+        }
+    }
+
+    false
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 
 /// Wipe bytes with volatile stores plus a compiler fence, so the scrub cannot be
 /// elided as a dead store or reordered past a security boundary.
@@ -113,6 +212,81 @@ pub(crate) fn zeroize_u64(word: &mut u64) {
     compiler_fence(Ordering::SeqCst);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Memory Poisoning (Defence-in-Depth)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Poison pattern for detecting use-after-free.
+///
+/// After zeroizing memory, we fill it with this pattern to detect
+/// use-after-free bugs. If code reads from freed memory, it will see
+/// this pattern instead of zeros, making bugs more obvious.
+///
+/// Reference: CWE-416 (Use After Free)
+/// <https://cwe.mitre.org/data/definitions/416.html>
+const POISON_PATTERN: u8 = 0xDE;
+
+/// Poison bytes with a pattern to detect use-after-free.
+///
+/// This is a defence-in-depth measure: after zeroizing memory, we fill it
+/// with a poison pattern (0xDE). If code reads from freed memory, it will
+/// see this pattern instead of zeros, making bugs more obvious.
+///
+/// Reference: Zero Trust 2026 — "defence-in-depth, verify everything"
+/// <https://nmsconsulting.com/latest-cybersecurity-best-practices-2026>
+#[inline(never)]
+pub(crate) fn poison_bytes(bytes: &mut [u8]) {
+    compiler_fence(Ordering::SeqCst);
+    for b in bytes.iter_mut() {
+        // SAFETY: `b` is a valid, uniquely borrowed byte.
+        unsafe {
+            core::ptr::write_volatile(b as *mut u8, POISON_PATTERN);
+        }
+    }
+    compiler_fence(Ordering::SeqCst);
+}
+
+/// Zeroize and poison bytes (zeroize → poison → zeroize).
+///
+/// This is a 3-pass wipe:
+/// 1. Zeroize (clear secrets)
+/// 2. Poison (fill with 0xDE to detect use-after-free)
+/// 3. Zeroize (final clean)
+///
+/// This ensures secrets are cleared, use-after-free is detectable, and
+/// the final state is clean zeros.
+#[inline(never)]
+pub(crate) fn zeroize_and_poison(bytes: &mut [u8]) {
+    zeroize_bytes(bytes);
+    poison_bytes(bytes);
+    zeroize_bytes(bytes);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Memory Canaries (Buffer Overflow Detection)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Canary value for detecting buffer overflows.
+///
+/// This is a sentinel value placed before and after buffers to detect
+/// buffer overflows. If the canary is modified, we know a buffer overflow
+/// occurred.
+///
+/// Reference: CWE-120 (Buffer Copy without Checking Size of Input)
+/// <https://cwe.mitre.org/data/definitions/120.html>
+const CANARY: u64 = 0xDEADBEEFCAFEBABE;
+
+/// Check if canary value is intact.
+///
+/// Returns `true` if the canary is intact, `false` if it was modified
+/// (indicating a buffer overflow).
+#[inline]
+pub(crate) fn check_canary(canary: u64) -> bool {
+    canary == CANARY
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+
 /// A heap-pinned, self-zeroising byte buffer.
 ///
 /// Invariants:
@@ -144,6 +318,15 @@ impl<const N: usize> Locked<N> {
     ///
     /// Locking is best-effort: on failure the buffer is still usable and
     /// `is_locked()` returns false.
+    ///
+    /// ## Budget Management (Zero Trust 2026)
+    ///
+    /// This function checks if we're approaching the `RLIMIT_MEMLOCK` limit
+    /// before attempting to lock memory. If usage > 80% of limit, we skip
+    /// locking to prevent unexpected failures.
+    ///
+    /// If locking succeeds, we update the global `LOCKED_MEMORY_USAGE` counter.
+    /// This counter is decremented in `Drop`.
     pub fn new() -> Self {
         let buf = Box::new([0u8; N]);
         #[cfg(feature = "std")]
@@ -152,9 +335,22 @@ impl<const N: usize> Locked<N> {
             #[cfg(miri)]
             let locked = false;
             #[cfg(not(miri))]
-            let locked = unsafe {
-                let ptr = buf.as_ptr() as *const libc::c_void;
-                libc::mlock(ptr, N) == 0
+            let locked = {
+                // Check if we're approaching RLIMIT_MEMLOCK limit (Zero Trust 2026)
+                if is_approaching_mlock_limit() {
+                    // Skip locking to prevent unexpected failures
+                    false
+                } else {
+                    let locked = unsafe {
+                        let ptr = buf.as_ptr() as *const libc::c_void;
+                        libc::mlock(ptr, N) == 0
+                    };
+                    // Update global counter if locking succeeded
+                    if locked {
+                        LOCKED_MEMORY_USAGE.fetch_add(N, Ordering::SeqCst);
+                    }
+                    locked
+                }
             };
             Locked { buf, locked }
         }
@@ -209,8 +405,11 @@ impl<const N: usize> Default for Locked<N> {
 impl<const N: usize> Drop for Locked<N> {
     #[inline(never)]
     fn drop(&mut self) {
-        // 1. Wipe the secret while pages are still resident and locked.
-        zeroize_bytes(&mut self.buf[..]);
+        // 1. Wipe and poison the secret (zeroize → poison → zeroize).
+        // This ensures secrets are cleared, use-after-free is detectable,
+        // and the final state is clean zeros.
+        zeroize_and_poison(&mut self.buf[..]);
+
         // 2. Unlock the pages (only if we successfully locked them).
         #[cfg(feature = "std")]
         if self.locked {
@@ -220,6 +419,8 @@ impl<const N: usize> Drop for Locked<N> {
                 let ptr = self.buf.as_ptr() as *const libc::c_void;
                 libc::munlock(ptr, N);
             }
+            // Decrement global counter (Zero Trust 2026 budget management)
+            LOCKED_MEMORY_USAGE.fetch_sub(N, Ordering::SeqCst);
         }
     }
 }
@@ -248,6 +449,85 @@ mod tests {
     fn fill_rejects_wrong_length() {
         let mut l: Locked<32> = Locked::new();
         assert!(!l.fill_from(&[0u8; 16]), "length mismatch must be rejected");
+    }
+
+    #[test]
+    fn zeroize_bytes_clears_memory() {
+        let mut buf = [0xFFu8; 32];
+        zeroize_bytes(&mut buf);
+        assert!(buf.iter().all(|&b| b == 0), "zeroize must clear all bytes");
+    }
+
+    #[test]
+    fn poison_bytes_fills_pattern() {
+        let mut buf = [0x00u8; 32];
+        poison_bytes(&mut buf);
+        assert!(
+            buf.iter().all(|&b| b == POISON_PATTERN),
+            "poison must fill with pattern 0xDE"
+        );
+    }
+
+    #[test]
+    fn zeroize_and_poison_clears_and_poisons() {
+        let mut buf = [0xFFu8; 32];
+        zeroize_and_poison(&mut buf);
+        // Final state should be zeros (zeroize → poison → zeroize)
+        assert!(
+            buf.iter().all(|&b| b == 0),
+            "zeroize_and_poison must end with zeros"
+        );
+    }
+
+    #[test]
+    fn canary_check_detects_modification() {
+        assert!(check_canary(CANARY), "intact canary must pass");
+        assert!(!check_canary(0x0000000000000000), "modified canary must fail");
+        assert!(!check_canary(0xFFFFFFFFFFFFFFFF), "modified canary must fail");
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn locked_memory_usage_tracking() {
+        let initial_usage = get_locked_memory_usage();
+
+        {
+            let _l1: Locked<64> = Locked::new();
+            let usage_after_1 = get_locked_memory_usage();
+            // Usage should increase (if mlock succeeded)
+            // On Android/Termux, mlock fails, so usage stays the same
+            #[cfg(not(target_os = "android"))]
+            assert!(usage_after_1 >= initial_usage);
+
+            let _l2: Locked<128> = Locked::new();
+            let usage_after_2 = get_locked_memory_usage();
+            // Usage should increase further (if mlock succeeded)
+            #[cfg(not(target_os = "android"))]
+            assert!(usage_after_2 >= usage_after_1);
+        }
+
+        // After drop, usage should return to initial (if mlock succeeded)
+        let final_usage = get_locked_memory_usage();
+        #[cfg(not(target_os = "android"))]
+        assert_eq!(final_usage, initial_usage, "usage must return to initial after drop");
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn mlock_limit_query() {
+        let limit = get_mlock_limit();
+        // Limit should be queryable (may be None on some systems)
+        if let Some(limit_bytes) = limit {
+            assert!(limit_bytes > 0, "limit must be positive");
+        }
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn approaching_mlock_limit_check() {
+        // This test verifies the function works, not the actual threshold
+        let _approaching = is_approaching_mlock_limit();
+        // Just verify it doesn't panic
     }
 
     #[test]

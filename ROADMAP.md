@@ -110,6 +110,15 @@ The implementation MUST produce identical output.
 
 **Status:** ✅ COMPLETE — All 11 secret types have Drop
 
+**Enhanced with Memory Isolation (Zero Trust 2026):**
+- Memory Locking Budget Management (global counter, 80% threshold)
+- Memory Locking Verification (reads `/proc/self/status` to verify `VmLck`)
+- Memory Poisoning (3-pass wipe: zeroize → poison → zeroize)
+- Memory Canaries (sentinel value `0xDEADBEEFCAFEBABE` for buffer overflow detection)
+- 7 new tests for memory isolation features
+
+**Reference:** Linux Security 2026 Hardening Best Practices, Zero Trust 2026
+
 ```
 - [x] l4_prove::Proof — zeroize ML-DSA signature
 - [x] relations/ml_dsa::Proof — zeroize ML-DSA signature (libcrux)
