@@ -113,6 +113,25 @@ jobs:
           retention-days: 30
         continue-on-error: true
 
+  wasm:
+    name: WASM Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Check WASM build (no_std)
+        run: cargo check --target wasm32-unknown-unknown --no-default-features
+      - name: Build WASM release
+        run: cargo build --target wasm32-unknown-unknown --release --no-default-features
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: veil7-wasm
+          path: target/wasm32-unknown-unknown/release/veil7.wasm
+          retention-days: 30
+
   cargo-vet:
     name: cargo-vet (dependency audit)
     runs-on: ubuntu-latest
