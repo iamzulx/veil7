@@ -89,7 +89,7 @@ fn compute_commitment(value: &[u8; COMPONENT], blinding: &[u8; COMPONENT]) -> [u
     xof.update(blinding);
     let mut out = [0u8; COMPONENT];
     let mut reader = xof.finalize_xof();
-    reader.read(&mut out);
+    let _ = reader.read(&mut out);
     out
 }
 

@@ -954,4 +954,114 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    // ── Edge cases ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn attest_bytes_empty_input() {
+        let v = attest_bytes(b"").unwrap();
+        assert!(v.is_valid_bool());
+    }
+
+    #[test]
+    fn attest_bytes_very_large_input() {
+        let large = vec![0xAAu8; 100_000];
+        let v = attest_bytes(&large).unwrap();
+        assert!(v.is_valid_bool());
+    }
+
+    #[test]
+    fn chain_root_single_event() {
+        let root = crate::chain::chain_root(&[b"single"]).unwrap();
+        assert_ne!(root, [0u8; 32]);
+    }
+
+    #[test]
+    fn merkle_root_two_leaves() {
+        let root = crate::merkle_root(&[b"leaf1", b"leaf2"]).unwrap();
+        assert_ne!(root, [0u8; 32]);
+    }
+
+    #[test]
+    fn prove_range_min_equals_max() {
+        let v = prove_range(50, 50, 50).unwrap();
+        assert!(v.is_valid_bool());
+    }
+
+    #[test]
+    fn prove_range_all_zero() {
+        let v = prove_range(0, 0, 0).unwrap();
+        assert!(v.is_valid_bool());
+    }
+
+    #[test]
+    fn microvm_execute_near_max_bytes() {
+        use crate::execution::vm::BytecodeBuilder;
+        // Build bytecode with 100 push instructions (under the 128 stack limit)
+        // Each push is 9 bytes (1 opcode + 8 bytes value) = 900 bytes total
+        let mut builder = BytecodeBuilder::new();
+        for _ in 0..100 {
+            builder = builder.push(42);
+        }
+        let code = builder.build();
+        assert_eq!(code.len(), 900);
+        let mut vm = crate::execution::MicroVM::new();
+        let root = vm.execute(&code);
+        assert_ne!(root, [0u8; 64]);
+    }
+
+    #[test]
+    fn shamir_split_large_shares() {
+        let secret = [0x42u8; 64];
+        // Max threshold is 32 (coeffs array size), so use t=32, n=50
+        let result = crate::shamir::split(&secret, 50, 32);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn shamir_reconstruct_empty_slice() {
+        let result = crate::shamir::reconstruct(&[]);
+        assert!(result.is_none());
+    }
+
+    // ── Error paths ────────────────────────────────────────────────────────
+
+    #[test]
+    fn attest_file_nonexistent_path() {
+        let result = attest_file("/nonexistent/file/that/does/not/exist.txt");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn commit_phase_empty_input() {
+        let result = crate::commit_reveal::commit_phase(b"");
+        assert!(result.is_ok()); // Empty input is valid
+    }
+
+    #[test]
+    fn blind_attest_empty_claim() {
+        let result = crate::blind::blind_attest(b"");
+        assert!(result.is_ok()); // Empty input is valid
+    }
+
+    #[test]
+    fn threshold_attest_n_zero() {
+        let result = threshold_attest(b"test", 0, 5);
+        assert!(result.is_err()); // n=0 is invalid
+    }
+
+    #[test]
+    fn shamir_split_t_greater_than_n() {
+        let secret = [0x42u8; 64];
+        let result = crate::shamir::split(&secret, 3, 5); // t > n
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn locked_fill_from_oversized_src() {
+        let mut locked = crate::l0_memlock::Locked::<32>::new();
+        let oversized = vec![0xAAu8; 64]; // Too large for Locked<32>
+        let result = locked.fill_from(&oversized);
+        assert!(!result); // Should reject oversized input
+    }
 }

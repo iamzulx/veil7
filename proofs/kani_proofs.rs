@@ -215,3 +215,124 @@ fn prove_dsa_sign_verify_roundtrip() {
     // Valid signature must verify
     assert!(result.is_ok(), "valid signature must verify");
 }
+
+/// Proof: chain_root produces non-zero output for non-empty input.
+#[cfg(kani)]
+#[kani::proof]
+fn prove_chain_root_non_empty() {
+    let event: [u8; 16] = kani::any();
+    let result = veil7::chain::chain_root(&[&event]);
+    assert!(result.is_ok(), "chain_root must succeed for non-empty input");
+    let root = result.unwrap();
+    assert_ne!(root, [0u8; 32], "chain_root must produce non-zero output");
+}
+
+/// Proof: chain_verify accepts valid chain.
+#[cfg(kani)]
+#[kani::proof]
+fn prove_chain_verify_accepts_valid() {
+    let event1: [u8; 8] = kani::any();
+    let event2: [u8; 8] = kani::any();
+    let root = veil7::chain::chain_root(&[&event1, &event2]).unwrap();
+    let valid = veil7::chain::chain_verify(&[&event1, &event2], &root);
+    assert_eq!(valid.unwrap_u8(), 1, "valid chain must verify");
+}
+
+/// Proof: merkle_root produces non-zero output for non-empty leaves.
+#[cfg(kani)]
+#[kani::proof]
+fn prove_merkle_root_non_empty() {
+    let leaf1: [u8; 16] = kani::any();
+    let leaf2: [u8; 16] = kani::any();
+    let result = veil7::merkle_root(&[&leaf1, &leaf2]);
+    assert!(result.is_ok(), "merkle_root must succeed for non-empty leaves");
+    let root = result.unwrap();
+    assert_ne!(root, [0u8; 32], "merkle_root must produce non-zero output");
+}
+
+/// Proof: Transcript domain separation prevents collisions.
+#[cfg(kani)]
+#[kani::proof]
+fn prove_transcript_domain_separation() {
+    let data: [u8; 16] = kani::any();
+    let mut t1 = veil7::common::transcript::Transcript::new(b"domain1");
+    let mut t2 = veil7::common::transcript::Transcript::new(b"domain2");
+    t1.absorb(&data);
+    t2.absorb(&data);
+    let c1 = t1.challenge(b"test");
+    let c2 = t2.challenge(b"test");
+    // Different domains must produce different challenges
+    assert_ne!(c1, c2, "different domains must produce different challenges");
+}
+
+/// Proof: MicroVM::execute does not panic on arbitrary bytecode.
+#[cfg(kani)]
+#[kani::proof]
+#[kani::unwind(5)]
+fn prove_microvm_no_panic_on_arbitrary() {
+    let bytecode: [u8; 32] = kani::any();
+    let mut vm = veil7::execution::MicroVM::new();
+    let _root = vm.execute(&bytecode);
+    // No panic expected
+}
+
+/// Proof: Locked::fill_from rejects oversized input.
+#[cfg(kani)]
+#[kani::proof]
+fn prove_locked_fill_from_rejects_oversized() {
+    let mut locked = veil7::l0_memlock::Locked::<32>::new();
+    let oversized = [0xAAu8; 64];
+    let result = locked.fill_from(&oversized);
+    assert!(!result, "Locked must reject oversized input");
+}
+
+/// Proof: blind_claim XOR involution property (blind twice = original).
+#[cfg(kani)]
+#[kani::proof]
+fn prove_blind_claim_involution() {
+    let claim: [u8; 16] = kani::any();
+    let factor = veil7::blind::BlindFactor::from_nonce([0x42; 32]);
+    let blinded = veil7::blind::blind_claim(&claim, &factor);
+    let recovered = veil7::blind::blind_claim(&blinded, &factor);
+    assert_eq!(&recovered[..], &claim[..], "blind twice must recover original");
+}
+
+/// Proof: commit_phase/reveal_phase binding property.
+#[cfg(kani)]
+#[kani::proof]
+fn prove_commit_reveal_binding() {
+    let claim: [u8; 16] = kani::any();
+    let (token, nonce) = veil7::commit_reveal::commit_phase(&claim).unwrap();
+    // Reveal with same claim must succeed
+    let result = veil7::commit_reveal::reveal_phase(&token, &nonce, &claim);
+    assert!(result.is_ok(), "reveal with same claim must succeed");
+}
+
+/// Proof: threshold_verify safety (no panic on valid params).
+#[cfg(kani)]
+#[kani::proof]
+#[kani::unwind(3)]
+fn prove_threshold_verify_safety() {
+    let claim: [u8; 8] = kani::any();
+    let claim_ref = veil7::Claim::new(&claim);
+    // n=2, m=3 should not panic
+    let _result = veil7::threshold::threshold_verify(&claim_ref, 2, 3);
+}
+
+/// Proof: ObliviousRAM read_modify_write correctness.
+#[cfg(kani)]
+#[kani::proof]
+fn prove_oram_rmw_correctness() {
+    let mut oram = veil7::storage::ObliviousRAM::new();
+    let initial = [0xAAu8; 64];
+    oram.write(0, initial);
+    let result = oram.read_modify_write(0, |old| {
+        let mut new = old;
+        for b in new.iter_mut() {
+            *b = b.wrapping_add(1);
+        }
+        new
+    });
+    // Result should be initial + 1
+    assert_eq!(result[0], 0xAB, "RMW must increment value");
+}

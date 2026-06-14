@@ -154,6 +154,16 @@ jobs:
           cargo kani --harness prove_kem_roundtrip_matches
           cargo kani --harness prove_dsa_keygen_valid_sizes
           cargo kani --harness prove_dsa_sign_verify_roundtrip
+          cargo kani --harness prove_chain_root_non_empty
+          cargo kani --harness prove_chain_verify_accepts_valid
+          cargo kani --harness prove_merkle_root_non_empty
+          cargo kani --harness prove_transcript_domain_separation
+          cargo kani --harness prove_microvm_no_panic_on_arbitrary
+          cargo kani --harness prove_locked_fill_from_rejects_oversized
+          cargo kani --harness prove_blind_claim_involution
+          cargo kani --harness prove_commit_reveal_binding
+          cargo kani --harness prove_threshold_verify_safety
+          cargo kani --harness prove_oram_rmw_correctness
         continue-on-error: true
         # continue-on-error: Kani is experimental; failures don't block CI
 

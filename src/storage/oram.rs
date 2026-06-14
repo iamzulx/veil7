@@ -239,7 +239,7 @@ fn oram_hash(input: &[u8]) -> [u8; 64] {
     xof.update(b"veil7:oram:hash:v1");
     xof.update(input);
     let mut reader = xof.finalize_xof();
-    reader.read(&mut out);
+    let _ = reader.read(&mut out);
     out
 }
 

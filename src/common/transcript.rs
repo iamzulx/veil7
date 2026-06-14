@@ -44,7 +44,7 @@ impl Transcript {
         framed(&mut xof, protocol_label);
         let mut state = [0u8; STATE_LEN];
         let mut reader = xof.finalize_xof();
-        reader.read(&mut state);
+        let _ = reader.read(&mut state);
         Transcript { state }
     }
 
@@ -63,7 +63,7 @@ impl Transcript {
         framed(&mut xof, data);
         let mut next = [0u8; STATE_LEN];
         let mut reader = xof.finalize_xof();
-        reader.read(&mut next);
+        let _ = reader.read(&mut next);
         self.state = next;
     }
 
@@ -81,7 +81,7 @@ impl Transcript {
         framed(&mut xof, label);
         xof.update(&(out.len() as u64).to_le_bytes());
         let mut reader = xof.finalize_xof();
-        reader.read(out);
+        let _ = reader.read(out);
 
         // 2. Fold the emitted challenge back into the state.
         let mut xof2 = Shake256::default();
@@ -91,7 +91,7 @@ impl Transcript {
         framed(&mut xof2, out);
         let mut next = [0u8; STATE_LEN];
         let mut reader2 = xof2.finalize_xof();
-        reader2.read(&mut next);
+        let _ = reader2.read(&mut next);
         self.state = next;
     }
 

@@ -336,7 +336,7 @@ impl MicroVM {
         // Derive final root from execution trace via SHAKE256.
         let mut root = [0u8; 64];
         let mut reader = trace.finalize_xof();
-        reader.read(&mut root);
+        let _ = reader.read(&mut root);
 
         // Wipe execution state.
         self.wipe_state();
@@ -442,58 +442,75 @@ impl BytecodeBuilder {
     }
 
     /// Push an immediate u64 value onto the VM stack.
+    /// Push a 64-bit value onto the stack.
     pub fn push(self, val: u64) -> Self {
         let mut b = self.op(OpCode::Push as u8);
         b.code.extend_from_slice(&val.to_le_bytes());
         b
     }
 
+    /// No-operation.
     pub fn nop(self) -> Self {
         self.op(OpCode::Nop as u8)
     }
+    /// Pop two values, push their sum (wrapping).
     pub fn add(self) -> Self {
         self.op(OpCode::Add as u8)
     }
+    /// Pop two values, push their XOR.
     pub fn xor(self) -> Self {
         self.op(OpCode::Xor as u8)
     }
+    /// Pop two values, push their product (wrapping).
     pub fn mul(self) -> Self {
         self.op(OpCode::Mul as u8)
     }
+    /// Pop two values, push their quotient (wrapping, 0 if divisor is 0).
     pub fn div(self) -> Self {
         self.op(OpCode::Div as u8)
     }
+    /// Pop and discard the top value.
     pub fn pop(self) -> Self {
         self.op(OpCode::Pop as u8)
     }
+    /// Duplicate the top value.
     pub fn dup(self) -> Self {
         self.op(OpCode::Dup as u8)
     }
+    /// Swap the top two values.
     pub fn swap(self) -> Self {
         self.op(OpCode::Swap as u8)
     }
+    /// Pop two values, push their bitwise AND.
     pub fn and(self) -> Self {
         self.op(OpCode::And as u8)
     }
+    /// Pop two values, push their bitwise OR.
     pub fn or(self) -> Self {
         self.op(OpCode::Or as u8)
     }
+    /// Pop one value, push its bitwise NOT.
     #[allow(clippy::should_implement_trait)]
     pub fn not(self) -> Self {
         self.op(OpCode::Not as u8)
     }
+    /// Pop two values, push left shifted by right (mod 64).
     pub fn shl(self) -> Self {
         self.op(OpCode::Shl as u8)
     }
+    /// Pop two values, push left shifted right by right (mod 64).
     pub fn shr(self) -> Self {
         self.op(OpCode::Shr as u8)
     }
+    /// Rotate the stack (bottom becomes top).
     pub fn rot(self) -> Self {
         self.op(OpCode::Rot as u8)
     }
+    /// Pop two values, push 1 if equal, 0 otherwise.
     pub fn eq(self) -> Self {
         self.op(OpCode::Eq as u8)
     }
+    /// Pop two values, push 1 if first < second, 0 otherwise.
     pub fn lt(self) -> Self {
         self.op(OpCode::Lt as u8)
     }

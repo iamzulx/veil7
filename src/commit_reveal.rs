@@ -150,7 +150,7 @@ pub fn reveal_phase(
 
     let mut recomputed = [0u8; 32];
     let mut reader = xof.finalize_xof();
-    reader.read(&mut recomputed);
+    let _ = reader.read(&mut recomputed);
 
     // Constant-time comparison.
     use subtle::ConstantTimeEq;

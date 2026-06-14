@@ -64,7 +64,7 @@ fn derive<const N: usize>(seed: &Seed, tag: &[u8]) -> [u8; N] {
     xof.update(seed.as_bytes());
     let mut out = [0u8; N];
     let mut reader = xof.finalize_xof();
-    reader.read(&mut out);
+    let _ = reader.read(&mut out);
     out
 }
 

@@ -85,7 +85,7 @@ fn derive_signing_randomness(seed: &[u8; 32], challenge: &[u8; 32]) -> [u8; 32] 
     xof.update(challenge);
     let mut out = [0u8; 32];
     let mut reader = xof.finalize_xof();
-    reader.read(&mut out);
+    let _ = reader.read(&mut out);
     out
 }
 

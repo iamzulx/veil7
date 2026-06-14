@@ -97,7 +97,7 @@ fn bit_commitment(bit: u8, nonce: &[u8; HASH]) -> [u8; HASH] {
     xof.update(nonce);
     let mut out = [0u8; HASH];
     let mut reader = xof.finalize_xof();
-    reader.read(&mut out);
+    let _ = reader.read(&mut out);
     out
 }
 

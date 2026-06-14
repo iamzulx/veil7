@@ -32,12 +32,14 @@ use crate::VeilError;
 /// A claim to be verified. Borrowed bytes — the pipeline never copies the claim
 /// into any persistent or emitted structure.
 pub struct Claim<'a> {
+    /// The data to attest.
     pub bytes: &'a [u8],
-    /// Optional context binding for entropy personalization. `&[]` if unused.
+    /// Optional personalization context (binds attestation to context).
     pub personalization: &'a [u8],
 }
 
 impl<'a> Claim<'a> {
+    /// Create a new claim with no personalization.
     pub fn new(bytes: &'a [u8]) -> Self {
         Claim {
             bytes,
@@ -296,7 +298,7 @@ pub fn verify_batch(claims: &[Claim<'_>]) -> Result<Verdict, VeilError> {
     // Derive the batch transcript (32 bytes).
     let mut batch_transcript = [0u8; 32];
     let mut reader = batch_xof.finalize_xof();
-    reader.read(&mut batch_transcript);
+    let _ = reader.read(&mut batch_transcript);
 
     Ok(Verdict::from_batch(all_valid, &batch_transcript))
 }

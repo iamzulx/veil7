@@ -124,7 +124,7 @@ pub fn unblind_transcript(transcript: &[u8; 32], factor: &BlindFactor) -> [u8; 3
     xof.update(&factor.nonce);
     let mut unmask = [0u8; 32];
     let mut reader = xof.finalize_xof();
-    reader.read(&mut unmask);
+    let _ = reader.read(&mut unmask);
 
     let mut unblinded = [0u8; 32];
     for i in 0..32 {

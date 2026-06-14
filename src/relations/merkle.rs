@@ -82,7 +82,7 @@ fn h32(parts: &[&[u8]]) -> [u8; HASH] {
     }
     let mut out = [0u8; HASH];
     let mut reader = xof.finalize_xof();
-    reader.read(&mut out);
+    let _ = reader.read(&mut out);
     out
 }
 

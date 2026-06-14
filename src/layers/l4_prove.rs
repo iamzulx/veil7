@@ -73,7 +73,7 @@ fn derive_sig_randomness(commitment: &Commitment) -> [u8; 32] {
     xof.update(commitment.as_bytes());
     let mut out = [0u8; 32];
     let mut reader = xof.finalize_xof();
-    reader.read(&mut out);
+    let _ = reader.read(&mut out);
     out
 }
 

@@ -98,7 +98,7 @@ pub fn threshold_verify(claim: &Claim<'_>, n: usize, m: usize) -> Result<Verdict
     // Derive aggregated transcript.
     let mut transcript = [0u8; 32];
     let mut reader = xof.finalize_xof();
-    reader.read(&mut transcript);
+    let _ = reader.read(&mut transcript);
 
     Ok(Verdict::from_batch(passed, &transcript))
 }

@@ -12,10 +12,15 @@ pub const ENTROPY_MIX: &[u8] = b"veil7:L1:entropy-mix:v1";
 pub const ENTROPY_FOLD: &[u8] = b"veil7:L1:entropy-fold:v1";
 /// Final pool uniformization (L1 mix step 3: XOR-folded pool → SHAKE256).
 pub const ENTROPY_FINALIZE: &[u8] = b"veil7:L1:entropy-finalize:v1";
+/// Domain tag for deriving ML-KEM-768 seed from master seed (L2).
 pub const KEM_SEED: &[u8] = b"veil7:L2:kem-seed:v1";
+/// Domain tag for deriving ML-DSA-65 seed from master seed (L2).
 pub const SIG_SEED: &[u8] = b"veil7:L2:sig-seed:v1";
+/// Domain tag for KEM encapsulation coins (L2).
 pub const KEM_ENCAP_COINS: &[u8] = b"veil7:L2:kem-encap-coins:v1";
+/// Domain tag for L3 commitment hash.
 pub const COMMITMENT: &[u8] = b"veil7:L3:commitment:v1";
+/// Domain tag for L7 transcript emission.
 pub const TRANSCRIPT: &[u8] = b"veil7:L7:transcript:v1";
 
 // ── Fiat-Shamir transcript (common::transcript) ──────────────────────────────
@@ -37,11 +42,17 @@ pub const FS_POST_CHALLENGE: &[u8] = b"veil7:fs:post-challenge:v1";
 // is one-way: an observer who knows all but one method's raw input cannot
 // recover the missing input from the final seed (this is the
 // "untraceability" property the engine requires from multi-source entropy).
+/// Domain tag for OS CSPRNG primary entropy source.
 pub const ENTROPY_SOURCE_OS_PRIMARY: &[u8] = b"veil7:L1:src:os-primary:v1";
+/// Domain tag for OS CSPRNG secondary entropy source.
 pub const ENTROPY_SOURCE_OS_SECONDARY: &[u8] = b"veil7:L1:src:os-secondary:v1";
+/// Domain tag for wall clock entropy source.
 pub const ENTROPY_SOURCE_WALL_CLOCK: &[u8] = b"veil7:L1:src:wall-clock:v1";
+/// Domain tag for stack address entropy source.
 pub const ENTROPY_SOURCE_STACK_ADDR: &[u8] = b"veil7:L1:src:stack-addr:v1";
+/// Domain tag for thread ID entropy source.
 pub const ENTROPY_SOURCE_THREAD_ID: &[u8] = b"veil7:L1:src:thread-id:v1";
+/// Domain tag for hardware counter entropy source.
 pub const ENTROPY_SOURCE_HW_COUNTER: &[u8] = b"veil7:L1:src:hw-counter:v1";
 
 // ── Tamper-evident chain (interface::attest_chain) ──────────────────────────
