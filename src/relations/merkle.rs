@@ -47,12 +47,30 @@ pub struct Witness {
     pub index: usize,
 }
 
+impl Drop for Witness {
+    #[inline(never)]
+    fn drop(&mut self) {
+        for leaf in self.leaves.iter_mut() {
+            crate::l0_memlock::zeroize_bytes(leaf);
+        }
+    }
+}
+
 /// Proof: the authentication path (sibling hashes bottom-up) plus the public
 /// position parameters needed to replay the level-reduction unambiguously.
 pub struct Proof {
     pub siblings: Vec<[u8; HASH]>,
     pub index: usize,
     pub leaf_count: usize,
+}
+
+impl Drop for Proof {
+    #[inline(never)]
+    fn drop(&mut self) {
+        for sib in self.siblings.iter_mut() {
+            crate::l0_memlock::zeroize_bytes(sib);
+        }
+    }
 }
 
 fn h32(parts: &[&[u8]]) -> [u8; HASH] {
