@@ -1,7 +1,7 @@
 # veil7 → Production Roadmap
 
 > **Status:** Research-grade prototype. NOT production-ready.
-> **Last updated:** 2026-06-14
+> **Last updated:** 2026-06-15
 
 ---
 
@@ -50,7 +50,7 @@ To reach production, **4 phases** must be completed.
 - `src/layers/l3_commit.rs` — commitment uses libcrux key serialization
 - `src/layers/l4_prove.rs` — Proof wraps MLDSA65Signature + Drop impl
 - `src/layers/l5_verify.rs` — verify + KEM roundtrip via libcrux
-- 347/347 tests pass (all layers verified end-to-end)
+- 372/372 tests pass (all layers verified end-to-end)
 - fmt clean, clippy clean, no_std clean, release build clean
 
 ### 1.2 — CAVP Algorithm Validation (HIGH 🟠)
@@ -148,10 +148,10 @@ The implementation MUST produce identical output.
 
 ### 2.3 — Formal Verification (MEDIUM 🟡)
 
-**Status:** ✅ SETUP COMPLETE — 8 Kani proof harnesses + CI job
+**Status:** ✅ SETUP COMPLETE — 22 Kani proof harnesses + CI job
 
 ```
-- [x] Kani proof harnesses (proofs/kani_proofs.rs — 8 proofs)
+- [x] Kani proof harnesses (proofs/kani_proofs.rs — 22 proofs)
 - [x] Kani CI job (nightly Rust, continue-on-error)
 - [ ] Prove: no secret-dependent branches (needs expanded harnesses)
 - [ ] Prove: all secrets zeroized before scope exit (needs expanded harnesses)
@@ -159,15 +159,16 @@ The implementation MUST produce identical output.
 
 ### 2.4 — Fuzzing Infrastructure (MEDIUM 🟡)
 
-**Status:** ✅ SETUP COMPLETE — 15 fuzz targets + CI job
+**Status:** ✅ SETUP COMPLETE — 17 fuzz targets + CI job
 
 ```
 - [x] cargo-fuzz setup (fuzz/Cargo.toml)
-- [x] 15 fuzz targets for all public APIs:
+- [x] 17 fuzz targets for all public APIs:
   - fuzz_verify_once, fuzz_attest_bytes, fuzz_chain_root, fuzz_chain_verify
   - fuzz_shake256, fuzz_shamir, fuzz_oram, fuzz_merkle, fuzz_microvm
   - fuzz_hash_preimage, fuzz_pedersen, fuzz_range_proof
   - fuzz_batch_verify, fuzz_blind_attest, fuzz_commit_reveal
+  - fuzz_kem_roundtrip, fuzz_dsa_sign_verify
 - [x] CI job: 60s per target (increase to 72h+ before release)
 - [x] Artifact upload for crash reproduction
 - [ ] AFL++ for CLI binary (Phase 3)
