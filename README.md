@@ -11,7 +11,7 @@ metadata, no trace, no persisted state.
 Verified on aarch64-android (Termux), Rust 1.95.0:
 
 - `cargo build` / `cargo build --release` — clean
-- `cargo test` — **375 tests** (233 unit + 142 integration), all passing
+- `cargo test` — **314 tests** (243 unit + 71 integration), all passing
 - `cargo clippy --all-targets -- -D warnings` — clean (zero warnings)
 - `cargo fmt --check` — clean
 - `cargo check --no-default-features` — clean (`#![no_std]` + `alloc` compatible)

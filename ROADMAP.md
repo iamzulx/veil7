@@ -277,7 +277,7 @@ The implementation MUST produce identical output.
 [x] cargo vet in CI (initial run, continue-on-error)
 [x] Miri in CI (nightly, -Zmiri-disable-isolation)
 [ ] dudect validation on target hardware
-[x] All tests passing (375/375)
+[x] All tests passing (314/314)
 [x] All Phase 1-4 actionable items complete (14/18)
 [x] Fuzzing setup (15 targets, 60s CI, increase to 72h before release)
 [x] Documented cryptographic policy (CRYPTO_POLICY.md)

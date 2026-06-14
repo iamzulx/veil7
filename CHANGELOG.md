@@ -15,6 +15,44 @@ Full codebase security audit performed. All HIGH and MEDIUM findings resolved:
 - **L2:** `Shake256Reader::read()` no longer panics (truncates + zero-fills)
 - **L6:** `Commitment` Debug impl redacts bytes (no metadata leakage)
 
+### New Interface Features (2026-06)
+
+**4 new high-impact features** exposed in `src/interface.rs`:
+
+- **Range Proof** — `prove_range(value, min, max)` proves a value is within
+  `[min, max]` without revealing the value. Uses bit-decomposition + SHAKE256
+  commitments. CLI: `prove range-proof <value> <min> <max>`.
+
+- **Threshold Attestation** — `threshold_attest(claim, n, m)` runs M independent
+  verification iterations and requires at least N to produce `valid=1`.
+  Distributes trust: compromising a single iteration does not affect outcome.
+  CLI: `threshold <n> <m> <text>`.
+
+- **Blind Attestation** — `blind_claim(claim)` + `attest_blinded(blinded)` +
+  `unblind_verdict(verdict, factor)`. The engine attests data it never sees.
+  Caller blinds with random mask, engine processes blinded data, caller unblinds.
+  CLI: `blind-sign <text>`.
+
+- **Forward-Secrecy Chain** — `attest_chain_entry(event, prev_transcript)` attests
+  a single chain entry, optionally chaining to a previous transcript. Each entry
+  chains to the previous, compromise of one does not break the chain.
+  CLI: `chain-entry <event> [prev_transcript_hex]`.
+
+### Multi-Method Stress Tests (2026-06)
+
+- `tests/stress.rs` — 11 stress tests:
+  - 32 threads × 10 iterations = 320 concurrent attestations
+  - 500 sequential iterations (60s+)
+  - Large inputs: 1B to 64KB (8 sizes)
+  - Edge cases: empty, single byte, all zeros/ones, alternating
+  - Chain: 1000 events chain verified
+  - Batch: 50 claims batch verified
+  - MicroVM: 3 complex programs (Fibonacci, bitwise, shifts)
+  - Shamir: 5 threshold configs (2,2) to (10,10)
+  - ORAM: 256 writes + reads + swaps + RMW
+  - Cross-module: 8 modules in sequence
+  - Timing consistency: 100 iters, spread < 10× avg
+
 ### Kani Formal Verification (2026-06)
 
 - `proofs/kani_proofs.rs` — 8 Kani proof harnesses:
