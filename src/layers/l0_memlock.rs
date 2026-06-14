@@ -99,7 +99,7 @@ pub fn is_approaching_mlock_limit() -> bool {
     }
 }
 
-/// Verify that memory is actually locked (Linux-specific).
+/// Check if memory is actually locked (Linux-specific).
 ///
 /// Reads `/proc/self/status` to check `VmLck` field and verify that
 /// the expected amount of memory is locked.
@@ -109,7 +109,7 @@ pub fn is_approaching_mlock_limit() -> bool {
 /// Reference: Linux kernel documentation on `/proc/self/status`
 /// <https://www.kernel.org/doc/Documentation/filesystems/proc.txt>
 #[cfg(all(feature = "std", target_os = "linux", not(miri)))]
-pub fn verify_mlock(expected_bytes: usize) -> bool {
+pub fn is_memory_locked(expected_bytes: usize) -> bool {
     use std::fs;
 
     if let Ok(status) = fs::read_to_string("/proc/self/status") {
