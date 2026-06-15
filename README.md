@@ -11,12 +11,14 @@ metadata, no trace, no persisted state.
 Verified on aarch64-android (Termux), Rust 1.95.0:
 
 - `cargo build` / `cargo build --release` — clean
-- `cargo test` — **372 tests** (270 unit + 102 integration), all passing
+- `cargo test` — **323 tests** (270 unit + 53 integration), all passing
 - `cargo clippy --all-targets -- -D warnings` — clean (zero warnings)
 - `cargo fmt --check` — clean
 - `cargo check --no-default-features` — clean (`#![no_std]` + `alloc` compatible)
-- Release binary: ~480 KB, stripped (no symbols)
-- ~12 800 lines of Rust (src + tests + fuzz targets)
+- Release binary: ~747 KB, stripped (no symbols)
+- ~16 300 lines of Rust (src + tests + fuzz targets)
+- **47 security enhancements** implemented across all 7 layers
+- **22 comprehensive stress tests** covering edge cases, boundary conditions, malformed inputs, metadata leakage, logging violations, multi-vector injection, deterministic behavior, and full pipeline integration
 
 ## Design invariants
 
