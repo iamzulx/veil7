@@ -119,7 +119,7 @@ pub fn is_memory_locked(expected_bytes: usize) -> bool {
                 if parts.len() >= 2 {
                     if let Ok(vm_lck_kb) = parts[1].parse::<u64>() {
                         // Convert expected bytes to KB (round up)
-                        let expected_kb = (expected_bytes + 1023) / 1024;
+                        let expected_kb = expected_bytes.div_ceil(1024);
                         return vm_lck_kb >= expected_kb as u64;
                     }
                 }
@@ -279,9 +279,11 @@ const CANARY: u64 = 0xDEADBEEFCAFEBABE;
 /// Check if canary value is intact.
 ///
 /// Returns `true` if the canary is intact, `false` if it was modified
-/// (indicating a buffer overflow).
+/// (indicating a buffer overflow). This is a public utility function that
+/// can be used by other modules to detect buffer overflows by checking
+/// sentinel values placed before/after buffers.
 #[inline]
-pub(crate) fn check_canary(canary: u64) -> bool {
+pub fn check_canary(canary: u64) -> bool {
     canary == CANARY
 }
 
