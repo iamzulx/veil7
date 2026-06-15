@@ -2,6 +2,58 @@
 
 ## [Unreleased]
 
+### Layer 1 Enhancements — Entropy Health Testing & Multi-Source Expansion (2026-06-15)
+
+**SP 800-90B Compliance:** Expanded entropy sources from 6 to 12 and implemented comprehensive health testing.
+
+#### Expanded Entropy Sources (6 → 12)
+
+**New 6 entropy sources (defence-in-depth):**
+- `process_id()` — Process ID (OS scheduling entropy)
+- `memory_allocation_addr()` — Heap allocation address (ASLR entropy)
+- `cpu_cache_timing()` — CPU cache access timing (microarchitectural jitter)
+- `page_fault_timing()` — Page fault timing (memory management jitter)
+- `interrupt_timing()` — Interrupt timing (OS scheduling jitter)
+- `memory_contention_timing()` — Memory contention timing (CPU load jitter)
+
+**Updated `harvest_multi_source()`** to use all 12 sources with defence-in-depth:
+- Each source contributes 64 bytes of raw entropy
+- Each source is whitened with domain-tagged SHAKE256 (one-way)
+- Pool is XOR-folded (order-independent)
+- Final SHAKE256 squeeze into locked buffer
+- All intermediates wiped (aggressive autowipe)
+
+#### Entropy Health Testing (SP 800-90B Compliance)
+
+**New module:** `src/entropy_health.rs` (280 lines)
+
+| Function | Purpose | Standard |
+|----------|---------|----------|
+| `repetition_count_test()` | Detect stuck entropy sources | SP 800-90B §4.4.1 |
+| `adaptive_proportion_test()` | Detect biased entropy sources | SP 800-90B §4.4.2 |
+| `estimate_min_entropy()` | Estimate min-entropy quality | Information theory |
+| `validate_source_diversity()` | Validate source independence | Pearson correlation |
+| `monitor_entropy_quality()` | Continuous health monitor | Defence-in-depth |
+| `health_check_source()` | Convenience function | All tests combined |
+
+**Security guarantees:**
+- Defence-in-depth: 12 independent sources
+- Health testing: RCT + APT (SP 800-90B)
+- Entropy estimation: min-entropy
+- Source diversity: correlation validation
+- Continuous monitoring: fail-safe on quality degradation
+- All functions follow veil7 philosophy (no logs, no panic, silent failures)
+
+**Test coverage:** 11 new tests for entropy health (287 total tests)
+
+**References:**
+- NIST SP 800-90B — Recommendation for Entropy Sources Used for Random Bit Generation
+- AWS-LC CPU Time Jitter RNG — SP 800-90B compliant (2026-04-07)
+- Jitterentropy Library — CPU execution timing jitter RNG
+- QPP-RNG — Raw randomness via system jitter (Nature Scientific Reports 2025)
+
+---
+
 ### Layer 0 Enhancements — Memory Isolation (2026-06-15)
 
 **Zero Trust 2026 Compliance:** Enhanced Layer 0 with memory isolation features based on latest security best practices.

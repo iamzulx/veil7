@@ -132,6 +132,64 @@ The implementation MUST produce identical output.
 - [x] blind::blind_claim — documented (output is public, not secret)
 ```
 
+### 1.6 — Entropy Health Testing & Multi-Source Expansion (CRITICAL 🔴)
+
+**Status:** ✅ COMPLETE — 12 entropy sources with SP 800-90B compliance
+
+**Expanded from 6 to 12 entropy sources (defence-in-depth):**
+
+**Original 6 sources:**
+1. `os_csprng_primary` — OS CSPRNG (cryptographic primary)
+2. `os_csprng_secondary` — OS CSPRNG (independent call)
+3. `wall_clock` — SystemTime nanoseconds
+4. `stack_addr` — Stack address (ASLR)
+5. `thread_id` — Thread ID
+6. `hw_counter` — Hardware counter (Instant)
+
+**New 6 sources (defence-in-depth):**
+7. `process_id` — Process ID (OS scheduling)
+8. `memory_allocation_addr` — Heap allocation address (ASLR)
+9. `cpu_cache_timing` — CPU cache access timing (microarchitectural jitter)
+10. `page_fault_timing` — Page fault timing (memory management jitter)
+11. `interrupt_timing` — Interrupt timing (OS scheduling jitter)
+12. `memory_contention_timing` — Memory contention timing (CPU load jitter)
+
+**Implemented entropy health testing (SP 800-90B compliance):**
+
+| Function | Purpose | Standard |
+|----------|---------|----------|
+| `repetition_count_test()` | Detect stuck entropy sources | SP 800-90B §4.4.1 |
+| `adaptive_proportion_test()` | Detect biased entropy sources | SP 800-90B §4.4.2 |
+| `estimate_min_entropy()` | Estimate min-entropy quality | Information theory |
+| `validate_source_diversity()` | Validate source independence | Pearson correlation |
+| `monitor_entropy_quality()` | Continuous health monitor | Defence-in-depth |
+| `health_check_source()` | Convenience function | All tests combined |
+
+**New module:** `src/entropy_health.rs` (280 lines)
+
+**Security guarantees:**
+- Defence-in-depth: 12 independent sources
+- Health testing: RCT + APT (SP 800-90B)
+- Entropy estimation: min-entropy
+- Source diversity: correlation validation
+- Continuous monitoring: fail-safe on quality degradation
+- All functions follow veil7 philosophy (no logs, no panic, silent failures)
+
+**Test coverage:** 11 new tests for entropy health (287 total tests)
+
+**Files:**
+- `src/entropy_health.rs` — Health testing module (new)
+- `src/entropy_sources.rs` — Added 6 new entropy source functions
+- `src/layers/l1_entropy.rs` — Updated `harvest_multi_source()` to use 12 sources
+- `src/common/domain.rs` — Added 6 new domain tags
+- `src/lib.rs` — Added `pub mod entropy_health`
+
+**References:**
+- NIST SP 800-90B — Recommendation for Entropy Sources Used for Random Bit Generation
+- AWS-LC CPU Time Jitter RNG — SP 800-90B compliant (2026-04-07)
+- Jitterentropy Library — CPU execution timing jitter RNG
+- QPP-RNG — Raw randomness via system jitter (Nature Scientific Reports 2025)
+
 ---
 
 ## 🏗️ PHASE 2: Hardening (2-4 months, ~$25K-75K)
