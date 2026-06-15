@@ -82,7 +82,54 @@ pub fn derive_keys(seed: &Seed) -> Result<EphemeralKeys, VeilError> {
     let dsa_kp = libcrux_backend::dsa_keygen(sig_seed_bytes);
     zeroize_bytes(&mut sig_seed_bytes);
 
-    Ok(EphemeralKeys { kem_kp, dsa_kp })
+    let keys = EphemeralKeys { kem_kp, dsa_kp };
+    
+    // Validate keys before returning
+    validate_keys(&keys)?;
+    validate_key_strength(&keys)?;
+    
+    Ok(keys)
+}
+
+/// Validate that generated keys are valid before use.
+///
+/// This prevents silent failures and follows the "refuse > guess" philosophy.
+/// Returns Ok(()) if keys are valid, Err(InvalidKey) otherwise.
+pub fn validate_keys(keys: &EphemeralKeys) -> Result<(), VeilError> {
+    // Validate ML-KEM-768 public key
+    let pk_bytes = libcrux_backend::kem_pk_bytes(&keys.kem_kp);
+    if !libcrux_backend::validate_kem_pk(pk_bytes) {
+        return Err(VeilError::Crypto);
+    }
+    
+    // Validate ML-DSA-65 verification key
+    let vk_bytes = libcrux_backend::dsa_vk_bytes(&keys.dsa_kp);
+    if !libcrux_backend::validate_dsa_vk(vk_bytes) {
+        return Err(VeilError::Crypto);
+    }
+    
+    Ok(())
+}
+
+/// Validate that key strength meets FIPS requirements.
+///
+/// This verifies that keys have the correct size for their security level.
+/// ML-KEM-768 and ML-DSA-65 both provide 192-bit security (Category 3).
+/// Returns Ok(()) if key strength is valid, Err(Crypto) otherwise.
+pub fn validate_key_strength(keys: &EphemeralKeys) -> Result<(), VeilError> {
+    // ML-KEM-768 should have 1184-byte public key
+    let pk_bytes = libcrux_backend::kem_pk_bytes(&keys.kem_kp);
+    if pk_bytes.len() != 1184 {
+        return Err(VeilError::Crypto);
+    }
+    
+    // ML-DSA-65 should have 1952-byte verification key
+    let vk_bytes = libcrux_backend::dsa_vk_bytes(&keys.dsa_kp);
+    if vk_bytes.len() != 1952 {
+        return Err(VeilError::Crypto);
+    }
+    
+    Ok(())
 }
 
 #[cfg(test)]

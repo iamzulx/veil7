@@ -46,6 +46,26 @@ pub const DSA_SIG_SIZE: usize = 3309;
 /// ML-DSA-65 keygen seed size (32 bytes).
 pub const DSA_SEED_SIZE: usize = 32;
 
+// ── Key validation ──────────────────────────────────────────────────────────
+
+/// Validate ML-KEM-768 public key.
+///
+/// Checks that the public key has the correct size.
+/// Returns true if valid, false otherwise.
+pub fn validate_kem_pk(pk_bytes: &[u8]) -> bool {
+    // Check size - libcrux will validate format when key is used
+    pk_bytes.len() == KEM_PK_SIZE
+}
+
+/// Validate ML-DSA-65 verification key.
+///
+/// Checks that the verification key has the correct size.
+/// Returns true if valid, false otherwise.
+pub fn validate_dsa_vk(vk_bytes: &[u8]) -> bool {
+    // Check size - libcrux will validate format when key is used
+    vk_bytes.len() == DSA_VK_SIZE
+}
+
 // ── Key generation ──────────────────────────────────────────────────────────
 
 /// Generate ML-KEM-768 key pair from a 64-byte seed (FIPS 203).
