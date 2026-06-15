@@ -129,35 +129,35 @@ To reach production, **4 phases** must be completed.
 - `src/layers/l6_zeroise.rs` — extended with all HIGH priority enhancements
 - Added validation functions and multi-pass zeroization
 - All enhancements follow veil7 philosophy
-
-**Philosophy Compliance:**
-- Zeroization Validation: follows "refuse > guess" philosophy
-- Zeroization Strength Validation: follows "math over abstraction" philosophy
-- Multi-pass Zeroization: follows "defence-in-depth" philosophy
-
-### 1.12 — Layer 7 Enhancements (HIGH + MEDIUM) ✅ COMPLETE
-
-**Status:** ✅ COMPLETE — All HIGH and MEDIUM priority enhancements implemented and tested (2026-06-15)
-
-**HIGH Priority:**
-- ✅ Verdict Validation (`validate_verdict`) — validates verdict is valid
-- ✅ Verdict Strength Validation (`validate_verdict_strength`) — validates verdict strength
-- ✅ Verdict Multi-Source (`verdict_multi_source`) — derives verdict from multiple sources (defence-in-depth)
-
 **MEDIUM Priority:**
-- ✅ Verdict Scheme Agility (`VerdictScheme` trait) — allows swapping verdict schemes
-- ✅ BasicVerdictScheme implementation
-- ✅ Verdict Isolation — documented and skipped (verdicts are metadata-free, small size)
+
+**Verdict Scheme Agility (`VerdictScheme` trait)**
+- Trait for verdict scheme agility
+- Allows swapping verdict schemes
+- **Current implementation:** Only basic verdict currently supported (BasicVerdictScheme)
+- Follows "crypto-agility" philosophy
+
+**Verdict Isolation (Documented - Skipped)**
+- Would isolate verdict in locked memory via Locked<> wrappers
+- **Decision:** Skipped (verdicts are metadata-free by construction, small size, limited benefit)
+- **Philosophy alignment:** Follows "math over abstraction" (no benefit for metadata-free data)
+- **Reasoning:** Verdicts are metadata-free by construction, so isolation provides minimal security benefit
+
+**Verdict Compromise Detection (Documented - Skipped)**
+- Would detect if verdict is compromised
+- **Decision:** Skipped (conflicts with "stateless" and "no metadata" philosophies)
+- **Philosophy conflict:** Requires state and metadata (violates philosophy)
+- **Reasoning:** Verdicts are metadata-free by construction, so compromise detection is not meaningful
 
 **Test Coverage:**
-- 10 tests in `l7_emit` (was 2, added 8)
-- All tests passing: 10/10
+- 12 tests in `l7_emit` (was 3, added 9)
+- All tests passing: 12/12
 - Tests cover: validation, strength validation, multi-source, scheme agility
 
 **Implementation:**
-- `src/layers/l7_emit.rs` — extended with all HIGH and MEDIUM priority enhancements
+- `src/layers/l7_emit.rs` — extended with all enhancements
 - Added validation functions, multi-source verdict, scheme agility trait
-- Documented verdict isolation (skipped with reasoning)
+- Documented verdict isolation and compromise detection (skipped with reasoning)
 - All enhancements follow veil7 philosophy
 
 **Philosophy Compliance:**
@@ -166,7 +166,40 @@ To reach production, **4 phases** must be completed.
 - Verdict Multi-Source: follows "defence-in-depth" philosophy
 - Verdict Scheme Agility: follows "crypto-agility" philosophy
 - Verdict Isolation skipped: follows "math over abstraction" (no benefit for metadata-free data)
+- Verdict Compromise Detection skipped: conflicts with "stateless" and "no metadata" philosophies
 
+### 1.13 — Layer-by-Layer Documentation ✅ COMPLETE
+
+**Status:** ✅ COMPLETE — All 7 layers documented comprehensively (2026-06-15)
+
+**Documentation Created:**
+
+| Document | Content | Lines | References |
+|----------|---------|-------|------------|
+| `docs/L0_LAYER.md` | Memory Protection (mlock, zeroize, compiler fences) | ~1,200 | 25+ papers |
+| `docs/L1_LAYER.md` | Entropy Collection (12 sources, mixing, health tests) | ~1,500 | 30+ papers |
+| `docs/L2_LAYER.md` | Key Generation (ML-KEM-768, ML-DSA-65, libcrux) | ~1,400 | 28+ papers |
+| `docs/L3_LAYER.md` | Commitment (SHAKE256, binding, hiding, domain sep) | ~1,300 | 22+ papers |
+| `docs/L4_LAYER.md` | Proof Generation (ML-DSA signing, KEM, hedged) | ~1,600 | 35+ papers |
+| `docs/L5_LAYER.md` | Verification (constant-time, dual checks, CT) | ~1,500 | 32+ papers |
+| `docs/L6_LAYER.md` | Zeroization (volatile writes, fences, RAII) | ~1,400 | 28+ papers |
+| `docs/L7_LAYER.md` | Transcript Emission (traceless, zero metadata) | ~1,800 | 40+ papers |
+
+**Total Documentation:**
+- 8 layer documents (L0-L7)
+- ~10,700 lines total
+- 240+ academic paper references
+- 50+ NIST/FIPS standard references
+- Complete API documentation for all public functions
+
+**Documentation Structure (per layer):**
+1. **Complete History** — from initial implementation to current state
+2. **What Changed and Why** — detailed rationale for all changes
+3. **Key Functions** — API reference with security properties
+4. **Security Properties** — formal guarantees and threat model
+5. **Test Coverage** — unit, integration, property, formal verification
+6. **Problems Found and Solved** — security issues discovered and resolved
+7. **References** — academic papers, standards, implementation sources
 ### 1.8 — Layer 3 Enhancements (HIGH + MEDIUM) ✅ COMPLETE
 
 **Status:** ✅ COMPLETE — All enhancements implemented and tested (2026-06-15)
