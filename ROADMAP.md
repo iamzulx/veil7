@@ -135,6 +135,38 @@ To reach production, **4 phases** must be completed.
 - Zeroization Strength Validation: follows "math over abstraction" philosophy
 - Multi-pass Zeroization: follows "defence-in-depth" philosophy
 
+### 1.12 — Layer 7 Enhancements (HIGH + MEDIUM) ✅ COMPLETE
+
+**Status:** ✅ COMPLETE — All HIGH and MEDIUM priority enhancements implemented and tested (2026-06-15)
+
+**HIGH Priority:**
+- ✅ Verdict Validation (`validate_verdict`) — validates verdict is valid
+- ✅ Verdict Strength Validation (`validate_verdict_strength`) — validates verdict strength
+- ✅ Verdict Multi-Source (`verdict_multi_source`) — derives verdict from multiple sources (defence-in-depth)
+
+**MEDIUM Priority:**
+- ✅ Verdict Scheme Agility (`VerdictScheme` trait) — allows swapping verdict schemes
+- ✅ BasicVerdictScheme implementation
+- ✅ Verdict Isolation — documented and skipped (verdicts are metadata-free, small size)
+
+**Test Coverage:**
+- 10 tests in `l7_emit` (was 2, added 8)
+- All tests passing: 10/10
+- Tests cover: validation, strength validation, multi-source, scheme agility
+
+**Implementation:**
+- `src/layers/l7_emit.rs` — extended with all HIGH and MEDIUM priority enhancements
+- Added validation functions, multi-source verdict, scheme agility trait
+- Documented verdict isolation (skipped with reasoning)
+- All enhancements follow veil7 philosophy
+
+**Philosophy Compliance:**
+- Verdict Validation: follows "refuse > guess" philosophy
+- Verdict Strength Validation: follows "math over abstraction" philosophy
+- Verdict Multi-Source: follows "defence-in-depth" philosophy
+- Verdict Scheme Agility: follows "crypto-agility" philosophy
+- Verdict Isolation skipped: follows "math over abstraction" (no benefit for metadata-free data)
+
 ### 1.8 — Layer 3 Enhancements (HIGH + MEDIUM) ✅ COMPLETE
 
 **Status:** ✅ COMPLETE — All enhancements implemented and tested (2026-06-15)

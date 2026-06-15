@@ -2,6 +2,56 @@
 
 ## [Unreleased]
 
+### Layer 7 Enhancements (2026-06-15)
+
+**HIGH Priority:**
+
+**Verdict Validation (`validate_verdict`)**
+- Validates that verdict is valid
+- Checks: Choice is valid (0 or 1), transcript not all zeros, transcript not all ones
+- Returns `Ok(())` if verdict is valid, `Err(Crypto)` if invalid
+- **Security benefit:** Detects invalid verdicts, prevents corrupted verdicts from being used
+- Follows "refuse > guess" philosophy
+
+**Verdict Strength Validation (`validate_verdict_strength`)**
+- Validates verdict strength meets requirements
+- Checks: transcript has sufficient entropy (not biased), at least 4 unique byte values
+- Returns `Ok(())` if strength is valid, `Err(Crypto)` if invalid
+- **Security benefit:** Ensures verdict has sufficient entropy, prevents weak verdicts
+- Follows "math over abstraction" philosophy
+
+**Verdict Multi-Source (`verdict_multi_source`)**
+- Derives verdict from multiple sources (defence-in-depth)
+- Combines: original verdict + additional context
+- Returns new verdict bound to multiple sources
+- **Security benefit:** Defence-in-depth (multiple sources), additional binding beyond original verdict
+- Follows "defence-in-depth" philosophy
+
+**MEDIUM Priority:**
+
+**Verdict Scheme Agility (`VerdictScheme` trait)**
+- Trait for verdict scheme agility
+- Allows swapping between different verdict schemes
+- **Current implementation:** Only basic verdict currently supported (BasicVerdictScheme)
+- Follows "crypto-agility" philosophy
+
+**Verdict Isolation (Documented - Skipped)**
+- Would isolate verdict in locked memory via Locked<> wrappers
+- **Decision:** Skipped (verdicts are metadata-free by construction, small size, limited benefit)
+- **Philosophy alignment:** Follows "math over abstraction" (no benefit for metadata-free data)
+- **Reasoning:** Verdicts are metadata-free by construction, so isolation provides minimal security benefit
+
+**Test Coverage:**
+- 10 tests in `l7_emit` (was 2, added 8)
+- All tests passing: 10/10
+- Tests cover: validation, strength validation, multi-source, scheme agility
+
+**Implementation:**
+- `src/layers/l7_emit.rs` — extended with all HIGH and MEDIUM priority enhancements
+- Added validation functions, multi-source verdict, scheme agility trait
+- Documented verdict isolation (skipped with reasoning)
+- All enhancements follow veil7 philosophy
+
 ### Layer 6 Enhancements (2026-06-15)
 
 **HIGH Priority:**
