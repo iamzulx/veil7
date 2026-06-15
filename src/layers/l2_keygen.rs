@@ -77,6 +77,19 @@ pub struct EphemeralKeys {
     pub dsa_kp: MLDSA65KeyPair,
 }
 
+// ── Key Isolation (Future Enhancement) ──────────────────────────────────────
+//
+// Key isolation via Locked<> wrappers would provide additional isolation by
+// placing keys in separate memory-locked regions. However, this requires
+// significant changes to the Locked<> struct to support complex types
+// (currently only supports byte arrays).
+//
+// Future enhancement: Extend Locked<> to support generic types with
+// ZeroizeOnDrop, then wrap EphemeralKeys fields in Locked<>.
+//
+// This follows the "defence-in-depth" philosophy by providing additional
+// isolation beyond the self-zeroizing behavior already present in libcrux types.
+
 impl Drop for EphemeralKeys {
     #[inline(never)]
     fn drop(&mut self) {
@@ -157,6 +170,35 @@ pub fn derive_keys(seed: &Seed) -> Result<EphemeralKeys, VeilError> {
     validate_key_strength(&keys)?;
     
     Ok(keys)
+}
+
+/// Derive keys from multiple independent seeds (defence-in-depth).
+///
+/// Combines multiple seeds using XOR to provide redundancy. If one seed
+/// is compromised, the others still provide security. This follows the
+/// "defence-in-depth" philosophy.
+///
+/// Note: This is an optional enhancement. The standard derive_keys() uses
+/// a single seed from L1, which is already high-entropy (from 12 sources).
+/// Multi-source derivation provides additional redundancy for high-security
+/// deployments.
+pub fn derive_keys_multi_source(seeds: &[Seed]) -> Result<EphemeralKeys, VeilError> {
+    if seeds.is_empty() {
+        return Err(VeilError::Crypto);
+    }
+    
+    // Combine multiple seeds using XOR
+    let mut combined_seed = [0u8; 64];
+    for seed in seeds {
+        for (i, byte) in seed.as_bytes().iter().enumerate() {
+            combined_seed[i] ^= byte;
+        }
+    }
+    
+    let combined = Seed::from_bytes(&combined_seed);
+    zeroize_bytes(&mut combined_seed);
+    
+    derive_keys(&combined)
 }
 
 /// Validate that generated keys are valid before use.
