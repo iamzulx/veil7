@@ -435,8 +435,8 @@ pub fn memory_contention_timing() -> EntropySource {
             barrier.wait();
             // Do some memory-intensive work
             let mut buffer = vec![0u8; 1024];
-            for i in 0..buffer.len() {
-                buffer[i] = buffer[i].wrapping_add(1);
+            for item in &mut buffer {
+                *item = item.wrapping_add(1);
             }
         }));
     }
@@ -446,8 +446,8 @@ pub fn memory_contention_timing() -> EntropySource {
 
     // Do memory-intensive work under contention
     let mut buffer = vec![0u8; 1024];
-    for i in 0..buffer.len() {
-        buffer[i] = buffer[i].wrapping_add(1);
+    for item in &mut buffer {
+        *item = item.wrapping_add(1);
     }
 
     let elapsed = start.elapsed().as_nanos();
