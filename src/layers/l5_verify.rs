@@ -29,6 +29,198 @@ pub trait Verifier {
     fn verify(keys: &EphemeralKeys, claim: &[u8], proof: &Proof) -> Result<Choice, VeilError>;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// HIGH PRIORITY ENHANCEMENTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Validate verification result before use.
+///
+/// Checks:
+/// - Result is valid (0 or 1)
+///
+/// Returns `Ok(())` if valid, `Err(Crypto)` if invalid.
+///
+/// **Security Benefit:**
+/// - Prevents invalid verification results from being used
+/// - Detects corrupted results early
+/// - Follows "refuse > guess" philosophy
+pub fn validate_verification_result(result: &Choice) -> Result<(), VeilError> {
+    let value = result.unwrap_u8();
+    
+    // Check result is valid (0 or 1)
+    if value != 0 && value != 1 {
+        return Err(VeilError::Crypto);
+    }
+    
+    Ok(())
+}
+
+/// Multi-check verification with defence-in-depth.
+///
+/// Performs multiple checks:
+/// 1. Validate proof format and strength
+/// 2. Standard verification (signature + KEM round-trip)
+///
+/// Returns `Choice` (1 = valid, 0 = invalid).
+///
+/// **Security Benefit:**
+/// - Defence-in-depth (multiple checks)
+/// - Detects invalid proofs early
+/// - Follows "defence-in-depth" philosophy
+pub fn verify_multi_check(
+    keys: &EphemeralKeys,
+    claim: &[u8],
+    proof: &Proof,
+) -> Result<Choice, VeilError> {
+    // Check 1: Validate proof
+    crate::l4_prove::validate_proof(proof)?;
+    crate::l4_prove::validate_proof_strength(proof)?;
+    
+    // Check 2: Standard verification
+    let standard_result = MlDsaVerifier::verify(keys, claim, proof)?;
+    
+    // Check 3: Validate verification result
+    validate_verification_result(&standard_result)?;
+    
+    Ok(standard_result)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MEDIUM PRIORITY ENHANCEMENTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Verification Isolation (MEDIUM Priority - Documented - Skipped) ─────────
+//
+// Verification isolation via Locked<> wrappers would provide additional isolation
+// by placing verification results in separate memory-locked regions. However,
+// this is optional because:
+//
+// 1. **Verification results are ephemeral** — they exist only for one iteration
+// 2. **Small size** — verification result is small (1 byte)
+// 3. **Limited benefit** — isolating ephemeral 1-byte data provides minimal security benefit
+//
+// **Recommendation:** Skip verification isolation. The current implementation is
+// sufficient because verification results are ephemeral and small.
+//
+// **Philosophy alignment:** This follows the "math over abstraction" philosophy.
+// Adding isolation for ephemeral 1-byte data would be unnecessary abstraction
+// without security benefit.
+
+/// Trait for verification scheme agility.
+///
+/// Allows swapping between different verification schemes (ML-DSA-65, ML-DSA-87, etc.)
+/// without changing the core verification logic.
+///
+/// **Security Benefit:**
+/// - Support multiple verification schemes
+/// - Future-proof for scheme swapping
+/// - Follows "crypto-agility" philosophy
+///
+/// **Note:** Future work. Only ML-DSA-65 currently supported.
+pub trait VerificationScheme {
+    type ProofType;
+    fn verify(
+        keys: &EphemeralKeys,
+        claim: &[u8],
+        proof: &Self::ProofType,
+    ) -> Result<Choice, VeilError>;
+}
+
+/// ML-DSA-65 verification scheme implementation.
+pub struct MlDsa65VerificationScheme;
+
+impl VerificationScheme for MlDsa65VerificationScheme {
+    type ProofType = Proof;
+    
+    fn verify(
+        keys: &EphemeralKeys,
+        claim: &[u8],
+        proof: &Proof,
+    ) -> Result<Choice, VeilError> {
+        MlDsaVerifier::verify(keys, claim, proof)
+    }
+}
+
+/// ML-DSA-87 verification scheme implementation (future work).
+pub struct MlDsa87VerificationScheme;
+
+impl VerificationScheme for MlDsa87VerificationScheme {
+    type ProofType = Proof;
+    
+    fn verify(
+        _keys: &EphemeralKeys,
+        _claim: &[u8],
+        _proof: &Proof,
+    ) -> Result<Choice, VeilError> {
+        // Future: Implement ML-DSA-87 verification
+        Err(VeilError::Crypto) // Not yet implemented
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LOW PRIORITY ENHANCEMENTS (Documented - Skipped)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Verification Compromise Detection (LOW Priority - Documented - Skipped) ─
+//
+// Verification compromise detection would involve tracking verifications and
+// detecting if they are compromised. However, this conflicts with the
+// "stateless" philosophy in several ways:
+//
+// **Why it was considered:**
+// - Detect if a verification has been compromised or tampered with
+// - Provide early warning of potential security issues
+// - Enable revocation of compromised verifications
+//
+// **What it would do:**
+// - Track all verification results in a stateful data structure
+// - Monitor for signs of compromise (e.g., timing anomalies, unexpected patterns)
+// - Flag suspicious verifications for manual review
+// - Enable revocation of compromised verifications
+//
+// **Why it was skipped (philosophy conflicts):**
+//
+// 1. **State requirement** — Detecting compromise requires maintaining state
+//    about previous verifications, which violates the "stateless" philosophy.
+//    veil7 is designed to be completely stateless — every iteration is
+//    independent and no state persists between iterations.
+//
+// 2. **Metadata leakage** — Tracking verifications creates metadata, which
+//    violates the "no metadata" philosophy. veil7 is designed to leave no
+//    trace — no logs, no metadata, no persistent state.
+//
+// 3. **Limited benefit** — Verification results are ephemeral (exist only
+//    for one iteration). The window for compromise is very small (milliseconds),
+//    making detection less valuable. By the time a compromise is detected,
+//    the verification has already been completed and the result discarded.
+//
+// 4. **Performance overhead** — Tracking all verifications would add significant
+//    performance overhead (memory allocation, state management, monitoring),
+//    which conflicts with veil7's performance goals.
+//
+// 5. **Complexity** — Implementing compromise detection would add significant
+//    complexity to the codebase, making it harder to audit and verify.
+//
+// **Recommendation:** Skip verification compromise detection. The stateless
+// design already provides strong security guarantees:
+// - Verification results are ephemeral (exist only for one iteration)
+// - Verification results are small (1 byte, Choice)
+// - Verification uses dual checks (signature + KEM round-trip)
+// - Verification is constant-time (no timing leaks)
+// - Verification results are validated (validate_verification_result)
+//
+// The risk of verification compromise is already very low due to the stateless
+// design and dual checks, and the cost of detection (state, metadata, performance,
+// complexity) outweighs the benefit.
+//
+// **Philosophy alignment:** This follows the "stateless" and "no metadata"
+// philosophies. Adding state and metadata for ephemeral 1-byte data would
+// violate these philosophies without security benefit.
+//
+// **Alternative approach:** If compromise detection is absolutely required,
+// consider implementing it at the application layer (outside veil7), where
+// state management is the application's responsibility, not veil7's.
+
 /// Default verifier: ML-DSA-65 signature + ML-KEM-768 round-trip consistency.
 /// Both via libcrux (hax/F* formally verified).
 pub struct MlDsaVerifier;
@@ -182,5 +374,29 @@ mod tests {
             1,
             "legitimate KEM round-trip must produce matching shared secrets"
         );
+    }
+
+    #[test]
+    fn validate_verification_result_accepts_valid_result() {
+        let valid_choice = Choice::from(1);
+        assert!(validate_verification_result(&valid_choice).is_ok());
+        
+        let invalid_choice = Choice::from(0);
+        assert!(validate_verification_result(&invalid_choice).is_ok());
+    }
+
+    #[test]
+    fn verify_multi_check_valid_proof() {
+        let (keys, proof) = valid_setup(b"hello");
+        let ok = verify_multi_check(&keys, b"hello", &proof).unwrap();
+        assert_eq!(ok.unwrap_u8(), 1);
+    }
+
+    #[test]
+    fn verification_scheme_trait_ml_dsa_65() {
+        let (keys, proof) = valid_setup(b"test");
+        let ok1 = MlDsa65VerificationScheme::verify(&keys, b"test", &proof).unwrap();
+        let ok2 = MlDsaVerifier::verify(&keys, b"test", &proof).unwrap();
+        assert_eq!(ok1.unwrap_u8(), ok2.unwrap_u8());
     }
 }
