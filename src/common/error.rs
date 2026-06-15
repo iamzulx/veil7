@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! The engine's single error type.
 
 /// Deliberately opaque: it never names *why* something failed, to avoid leaking

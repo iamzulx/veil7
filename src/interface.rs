@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! Simple interface wrapper — one-call attestation for common use cases.
 //!
 //! This module is intentionally thin: it only routes inputs into the engine

@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! Oblivious RAM — constant-time memory access pattern.
 //!
 //! An ORAM hides *which* slot is being read or written by touching every slot

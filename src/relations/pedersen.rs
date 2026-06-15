@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! Pedersen-style commitment opening relation.
 //!
 //! Proves knowledge of a (value, blinding) pair that opens a SHAKE256

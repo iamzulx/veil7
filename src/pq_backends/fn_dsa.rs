@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! Formal FN-DSA / FIPS 206 backend (scaffold).
 //!
 //! FIPS 206 (FN-DSA, formerly known as FALCON) is the FFT-over-NTRU lattice

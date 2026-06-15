@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! Tamper-evident event chain — domain-separated SHAKE256 accumulator.
 //!
 //! This module is the engine-level realisation of USE_CASES.md §7

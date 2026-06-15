@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! Threshold verification — N-of-M distributed trust.
 //!
 //! Run the same claim through M independent engine iterations and require

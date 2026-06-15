@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! Hybrid PQ+Classical attestation — dual-layer defense-in-depth.
 //!
 //! Runs both the post-quantum (ML-DSA-65) pipeline AND a classical

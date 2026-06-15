@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! Commit-Reveal protocol — two-phase attestation.
 //!
 //! Phase 1 (Commit): the caller submits a claim and receives a 32-byte

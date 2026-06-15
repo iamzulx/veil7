@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! Merkle inclusion relation — proof of set membership against a public root.
 //!
 //! Proves: "the value at position `index` is a member of the set whose Merkle

@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! L7 — Traceless Emission.
 //!
 //! The only thing that leaves the engine. A `Verdict` carries:

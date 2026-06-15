@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! Multi-method entropy harvest with **per-method untraceability**.
 //!
 //! Each method produces 64 bytes of raw entropy. The raw bytes are

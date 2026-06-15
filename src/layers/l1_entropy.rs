@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! L1 — Entropy Harvest (multi-source mix workflow).
 //!
 //! Each call performs [`MIX_ITERATIONS`] rounds of an entropy mix:

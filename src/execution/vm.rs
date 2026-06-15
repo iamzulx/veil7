@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! MicroVM — isolated, deterministic bytecode executor.
 //!
 //! A stack machine with a canary-protected operand stack (128 × u64).

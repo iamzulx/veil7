@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! L4 — Proof Generation (libcrux backend).
 //!
 //! Produces a post-quantum proof that the holder of the ephemeral secret key

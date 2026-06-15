@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! Constant-time Keccak wrapper — defense-in-depth masking layer.
 //!
 //! **Update (Phase 2.1):** SHAKE256 is now backed by **libcrux-sha3** which

@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! SHAKE256 wrapper around libcrux-sha3 (formally verified, constant-time).
 //!
 //! Replaces the RustCrypto `sha3` crate with libcrux-sha3, which is:

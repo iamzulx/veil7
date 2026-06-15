@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! Domain-separation tags.
 //!
 //! Distinct constants prevent cross-protocol collisions in the single SHAKE256

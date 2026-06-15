@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! Formal post-quantum signature backends.
 //!
 //! These provide direct access to RustCrypto PQ implementations with

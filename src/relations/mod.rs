@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! Relations — the universal verification core.
 //!
 //! A [`Relation`] defines *what is being proven*: knowledge of a witness `w`

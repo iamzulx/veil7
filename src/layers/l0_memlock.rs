@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! L0 — Memory Locking (defence-in-depth, swap protection).
 //!
 //! Provides [`Locked`]: a heap-boxed byte buffer whose pages are pinned in RAM

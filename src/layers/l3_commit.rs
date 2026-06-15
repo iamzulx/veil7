@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! L3 — Commitment (libcrux backend).
 //!
 //! Binds the claim to the ephemeral identity. Produces a domain-separated

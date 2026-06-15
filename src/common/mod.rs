@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! Foundational shared types used across every layer.
 //!
 //! Named `common` rather than `core` deliberately: a module literally named

@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! L6 — Zeroization.
 //!
 //! Defence-in-depth wiping. The PQ secret keys already self-wipe on Drop

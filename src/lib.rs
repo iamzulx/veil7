@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! veil7 — stateless 7-layer universal post-quantum verification engine.
 //!
 //! Invariants (enforced by construction, not by policy):

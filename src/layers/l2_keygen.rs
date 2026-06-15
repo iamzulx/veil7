@@ -1,3 +1,4 @@
+// Author: Iamzulx
 //! L2 — Ephemeral Keygen (libcrux backend).
 //!
 //! Deterministically derives two independent post-quantum keypairs from the L1
