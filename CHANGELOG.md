@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### CI Fixes (2026-06-15)
+
+**Format Job Failure:**
+- Fixed trailing whitespace on blank lines in `l2_keygen.rs`
+- Commit: `501f50c`
+
+**Clippy Job Failure:**
+- Fixed `clippy::needless_range_loop` warnings in `entropy_sources.rs`
+- Changed `for i in 0..buffer.len()` to `for item in &mut buffer` (2 places)
+- Commit: `4652800`
+
 ### Layer 2 Enhancements (2026-06-15)
 
 **HIGH Priority Enhancements:**
