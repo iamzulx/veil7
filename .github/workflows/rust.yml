@@ -105,7 +105,7 @@ jobs:
           done
         working-directory: .
       - name: Upload fuzz artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: fuzz-artifacts
@@ -126,7 +126,7 @@ jobs:
       - name: Build WASM release
         run: cargo build --target wasm32-unknown-unknown --release --no-default-features
       - name: Upload WASM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: veil7-wasm
           path: target/wasm32-unknown-unknown/release/veil7.wasm
