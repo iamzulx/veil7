@@ -8,6 +8,13 @@
 //! Statelessness: keys exist only for the lifetime of the returned `EphemeralKeys`.
 //! Both PQ key types are wrapped in libcrux types that self-zeroize on drop.
 //! The derived sub-seeds are wiped here before returning.
+//!
+//! ## Crypto-Agility
+//!
+//! This module supports crypto-agility via the `KeyGenerator` trait, allowing
+//! easy swapping of cryptographic algorithms (e.g., ML-KEM-1024, ML-DSA-87)
+//! without changing the core logic. This follows NIST SP 800-131A Rev. 3
+//! recommendation for crypto-agility.
 
 use crate::l0_memlock::zeroize_bytes;
 use crate::l1_entropy::Seed;
@@ -18,6 +25,46 @@ use libcrux_ml_dsa::ml_dsa_65::MLDSA65KeyPair;
 use libcrux_ml_kem::mlkem768::MlKem768KeyPair;
 
 use crate::shake256::Shake256;
+
+// ── Crypto-Agility: KeyGenerator trait ──────────────────────────────────────
+
+/// Trait for crypto-agile key generation.
+///
+/// Allows easy swapping of cryptographic algorithms without changing core logic.
+/// Follows NIST SP 800-131A Rev. 3 recommendation for crypto-agility.
+pub trait KeyGenerator {
+    /// The type of key pair generated.
+    type KeyPair;
+    
+    /// Generate a key pair from a seed.
+    fn generate(seed: &Seed) -> Result<Self::KeyPair, VeilError>;
+}
+
+/// ML-KEM-768 key generator (FIPS 203, Category 3, 192-bit security).
+pub struct MlKem768Generator;
+
+impl KeyGenerator for MlKem768Generator {
+    type KeyPair = MlKem768KeyPair;
+    
+    fn generate(seed: &Seed) -> Result<Self::KeyPair, VeilError> {
+        let kem_seed = derive_hkdf::<64>(seed, domain::KEM_SEED)?;
+        let kp = libcrux_backend::kem_keygen(kem_seed);
+        Ok(kp)
+    }
+}
+
+/// ML-DSA-65 key generator (FIPS 204, Category 3, 192-bit security).
+pub struct MlDsa65Generator;
+
+impl KeyGenerator for MlDsa65Generator {
+    type KeyPair = MLDSA65KeyPair;
+    
+    fn generate(seed: &Seed) -> Result<Self::KeyPair, VeilError> {
+        let sig_seed = derive_hkdf::<32>(seed, domain::SIG_SEED)?;
+        let kp = libcrux_backend::dsa_keygen(sig_seed);
+        Ok(kp)
+    }
+}
 
 /// Ephemeral post-quantum key material for a single verification iteration.
 ///
