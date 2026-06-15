@@ -368,7 +368,32 @@ The implementation MUST produce identical output.
 
 ---
 
-## 📝 Changelog
+## Future Work
+
+### Layer Deep Dives (Documentation)
+
+Detailed documentation untuk each layer (deferred for future):
+
+- **Layer 0 (l0_memlock)** — Memory locking and zeroization primitives
+- **Layer 1 (l1_entropy)** — Entropy harvesting and health testing
+- **Layer 2 (l2_keygen)** — Ephemeral key generation (libcrux)
+- **Layer 3 (l3_commit)** — Commitment generation
+- **Layer 4 (l4_prove)** — Proof generation
+- **Layer 5 (l5_verify)** — Verification
+- **Layer 6 (l6_zeroise)** — Zeroization barrier
+- **Layer 7 (l7_emit)** — Transcript emission
+
+Each layer documentation will include:
+- Architecture diagram
+- Security properties
+- Threat model
+- Implementation details
+- Test coverage
+- Performance characteristics
+
+---
+
+## Changelog
 
 | Date | Update |
 |------|--------|
