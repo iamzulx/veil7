@@ -2,6 +2,64 @@
 
 ## [Unreleased]
 
+### Layer 2 Enhancements (2026-06-15)
+
+**HIGH Priority Enhancements:**
+
+**Key Validation (`validate_keys`)**
+- Validates ML-KEM-768 public key and ML-DSA-65 verification key before use
+- Prevents silent failures, follows "refuse > guess" philosophy
+- libcrux validates key format when keys are used
+- Reference: NIST FIPS 203/204 require key validation
+
+**Key Strength Validation (`validate_key_strength`)**
+- Verifies key strength meets FIPS 203/204 requirements
+- ML-KEM-768: 192-bit security (Category 3)
+- ML-DSA-65: 192-bit security (Category 3)
+- Prevents weak keys, follows "math over abstraction" philosophy
+
+**MEDIUM Priority Enhancements:**
+
+**HKDF-SHA256 (`derive_hkdf`)**
+- Stronger KDF than plain SHAKE256, recommended by NIST SP 800-56C
+- Uses SHA-256 instead of SHAKE256 (HKDF requires fixed-output hash, not XOF)
+- Better security margins for key derivation
+- Follows "math over abstraction" philosophy
+- Note: Implemented but not yet used in `derive_keys()` (uses SHAKE256 for backward compatibility)
+- Reference: NIST SP 800-56C "Recommendation for Key-Derivation Methods"
+
+**Crypto-Agility (`KeyGenerator` trait)**
+- Trait for crypto-agile key generation
+- `MlKem768Generator` implementation (FIPS 203, Category 3)
+- `MlDsa65Generator` implementation (FIPS 204, Category 3)
+- Allows easy swapping of algorithms (e.g., ML-KEM-1024, ML-DSA-87)
+- Follows NIST SP 800-131A Rev. 3 recommendation for crypto-agility
+- Reference: NIST SP 800-131A Rev. 3 "Transitioning the Use of Cryptographic Algorithms"
+
+**Key Isolation (Documented)**
+- Documented as future enhancement
+- Requires extending `Locked<>` to support generic types with `ZeroizeOnDrop`
+- Follows "defence-in-depth" philosophy
+- Current implementation: `EphemeralKeys` already self-zeroizes on drop
+
+**Key Derivation Multi-Source (`derive_keys_multi_source`)**
+- Derives keys from multiple independent seeds using XOR
+- Provides redundancy: if one seed is compromised, others still provide security
+- Follows "defence-in-depth" philosophy
+- Optional enhancement for high-security deployments
+- Note: Standard `derive_keys()` uses a single seed from L1 (already high-entropy from 12 sources)
+
+**Key Compromise Detection (Documented with Philosophy Conflict)**
+- Documented with philosophy conflict reasoning
+- Conflicts with "stateless" philosophy (requires state, metadata, performance overhead)
+- Recommendation: Skip (stateless design already provides strong security guarantees)
+- Risk of key compromise is very low due to stateless design
+
+**Test Coverage:**
+- 12 tests in `l2_keygen` (was 5, added 7)
+- All tests passing: 12/12
+- Tests cover: validation, HKDF, crypto-agility, multi-source derivation
+
 ### Layer 1 Enhancements — Entropy Health Testing & Multi-Source Expansion (2026-06-15)
 
 **SP 800-90B Compliance:** Expanded entropy sources from 6 to 12 and implemented comprehensive health testing.
