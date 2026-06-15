@@ -327,7 +327,11 @@ pub fn process_id() -> EntropySource {
 /// `no_std` stub: no process ID available. Returns zero buffer.
 #[cfg(not(feature = "std"))]
 pub fn process_id() -> EntropySource {
-    EntropySource::from_raw("process_id", domain::ENTROPY_SOURCE_PROCESS_ID, [0u8; SOURCE_LEN])
+    EntropySource::from_raw(
+        "process_id",
+        domain::ENTROPY_SOURCE_PROCESS_ID,
+        [0u8; SOURCE_LEN],
+    )
 }
 
 /// Read the address of a heap allocation as an entropy source.
@@ -339,7 +343,11 @@ pub fn memory_allocation_addr() -> EntropySource {
     let addr = allocation.as_ptr() as usize as u64;
     let mut raw = [0u8; SOURCE_LEN];
     raw[..8].copy_from_slice(&addr.to_le_bytes());
-    EntropySource::from_raw("memory_allocation_addr", domain::ENTROPY_SOURCE_MEMORY_ALLOC, raw)
+    EntropySource::from_raw(
+        "memory_allocation_addr",
+        domain::ENTROPY_SOURCE_MEMORY_ALLOC,
+        raw,
+    )
 }
 
 /// Read CPU cache access timing as an entropy source.
@@ -393,9 +401,9 @@ pub fn page_fault_timing() -> EntropySource {
 /// system load, providing entropy from interrupt jitter.
 #[cfg(feature = "std")]
 pub fn interrupt_timing() -> EntropySource {
-    use std::time::Instant;
     use std::thread;
     use std::time::Duration;
+    use std::time::Instant;
 
     // Sleep for a short time to allow interrupts to occur
     let start = Instant::now();
@@ -413,9 +421,9 @@ pub fn interrupt_timing() -> EntropySource {
 /// state, and memory bandwidth, providing entropy from memory contention jitter.
 #[cfg(feature = "std")]
 pub fn memory_contention_timing() -> EntropySource {
-    use std::time::Instant;
     use std::sync::{Arc, Barrier};
     use std::thread;
+    use std::time::Instant;
 
     // Create contention by spawning multiple threads
     let barrier = Arc::new(Barrier::new(5));
@@ -451,7 +459,11 @@ pub fn memory_contention_timing() -> EntropySource {
     let mut raw = [0u8; SOURCE_LEN];
     raw[..16].copy_from_slice(&elapsed.to_le_bytes());
 
-    EntropySource::from_raw("memory_contention_timing", domain::ENTROPY_SOURCE_MEMORY_CONTENTION, raw)
+    EntropySource::from_raw(
+        "memory_contention_timing",
+        domain::ENTROPY_SOURCE_MEMORY_CONTENTION,
+        raw,
+    )
 }
 
 /// `no_std` stub: no `Instant` available. The raw buffer is zero.

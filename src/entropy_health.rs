@@ -254,7 +254,10 @@ mod tests {
     fn estimate_min_entropy_uniform() {
         let samples: Vec<u8> = (0..=255).cycle().take(1000).collect();
         let entropy = estimate_min_entropy(&samples);
-        assert!(entropy > 7.0, "Uniform distribution should have high entropy");
+        assert!(
+            entropy > 7.0,
+            "Uniform distribution should have high entropy"
+        );
     }
 
     #[cfg(feature = "std")]

@@ -28,7 +28,7 @@
 
 extern crate alloc;
 use alloc::boxed::Box;
-use core::sync::atomic::{AtomicUsize, Ordering, compiler_fence};
+use core::sync::atomic::{compiler_fence, AtomicUsize, Ordering};
 
 #[cfg(feature = "std")]
 extern crate libc;
@@ -484,8 +484,14 @@ mod tests {
     #[test]
     fn canary_check_detects_modification() {
         assert!(check_canary(CANARY), "intact canary must pass");
-        assert!(!check_canary(0x0000000000000000), "modified canary must fail");
-        assert!(!check_canary(0xFFFFFFFFFFFFFFFF), "modified canary must fail");
+        assert!(
+            !check_canary(0x0000000000000000),
+            "modified canary must fail"
+        );
+        assert!(
+            !check_canary(0xFFFFFFFFFFFFFFFF),
+            "modified canary must fail"
+        );
     }
 
     #[cfg(feature = "std")]
@@ -511,7 +517,10 @@ mod tests {
         // After drop, usage should return to initial (if mlock succeeded)
         let final_usage = get_locked_memory_usage();
         #[cfg(not(target_os = "android"))]
-        assert_eq!(final_usage, initial_usage, "usage must return to initial after drop");
+        assert_eq!(
+            final_usage, initial_usage,
+            "usage must return to initial after drop"
+        );
     }
 
     #[cfg(feature = "std")]
