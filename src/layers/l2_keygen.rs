@@ -90,6 +90,35 @@ pub struct EphemeralKeys {
 // This follows the "defence-in-depth" philosophy by providing additional
 // isolation beyond the self-zeroizing behavior already present in libcrux types.
 
+// ── Key Compromise Detection (LOW Priority - Philosophy Conflict) ────────────
+//
+// Key compromise detection would involve periodically testing keys by signing
+// and verifying a test message. However, this conflicts with the "stateless"
+// philosophy in several ways:
+//
+// 1. **State requirement**: Detecting compromise requires maintaining state
+//    about previous key usage, which violates the stateless philosophy.
+//
+// 2. **Metadata leakage**: Tracking key usage creates metadata, which violates
+//    the "no metadata" philosophy.
+//
+// 3. **Performance overhead**: Periodic testing adds computational overhead,
+//    which conflicts with the performance goals.
+//
+// 4. **Limited benefit**: In a stateless system, keys are ephemeral and
+//    short-lived. The window for compromise is very small, making detection
+//    less valuable.
+//
+// **Recommendation**: Skip key compromise detection. The stateless design
+// already provides strong security guarantees:
+// - Keys are ephemeral (exist only for one verification iteration)
+// - Keys are self-zeroizing (wiped on drop)
+// - Keys are derived from high-entropy sources (12 independent sources)
+// - Keys are validated before use (validate_keys, validate_key_strength)
+//
+// The risk of key compromise is already very low due to the stateless design,
+// and the cost of detection (state, metadata, performance) outweighs the benefit.
+
 impl Drop for EphemeralKeys {
     #[inline(never)]
     fn drop(&mut self) {
@@ -332,5 +361,74 @@ mod tests {
                 "ML-DSA vk at window {window} equals master seed (KDF leak)"
             );
         }
+    }
+
+    #[test]
+    fn derive_keys_validates_keys() {
+        let seed = harvest(b"validate").unwrap();
+        let keys = derive_keys(&seed).unwrap();
+        // If we get here, validation passed
+        let _vk_bytes = libcrux_backend::dsa_vk_bytes(&keys.dsa_kp);
+        let _pk_bytes = libcrux_backend::kem_pk_bytes(&keys.kem_kp);
+    }
+
+    #[test]
+    fn derive_keys_validates_key_strength() {
+        let seed = harvest(b"strength").unwrap();
+        let keys = derive_keys(&seed).unwrap();
+        // If we get here, key strength validation passed
+        let pk_bytes = libcrux_backend::kem_pk_bytes(&keys.kem_kp);
+        let vk_bytes = libcrux_backend::dsa_vk_bytes(&keys.dsa_kp);
+        assert_eq!(pk_bytes.len(), 1184, "ML-KEM-768 pk must be 1184 bytes");
+        assert_eq!(vk_bytes.len(), 1952, "ML-DSA-65 vk must be 1952 bytes");
+    }
+
+    #[test]
+    fn derive_keys_multi_source_single_seed() {
+        let seed = harvest(b"multi").unwrap();
+        let keys = derive_keys_multi_source(&[seed]).unwrap();
+        // Should work with a single seed
+        let _vk_bytes = libcrux_backend::dsa_vk_bytes(&keys.dsa_kp);
+        let _pk_bytes = libcrux_backend::kem_pk_bytes(&keys.kem_kp);
+    }
+
+    #[test]
+    fn derive_keys_multi_source_two_seeds() {
+        let seed1 = harvest(b"multi1").unwrap();
+        let seed2 = harvest(b"multi2").unwrap();
+        let keys = derive_keys_multi_source(&[seed1, seed2]).unwrap();
+        // Should work with two seeds
+        let _vk_bytes = libcrux_backend::dsa_vk_bytes(&keys.dsa_kp);
+        let _pk_bytes = libcrux_backend::kem_pk_bytes(&keys.kem_kp);
+    }
+
+    #[test]
+    fn derive_keys_multi_source_empty_fails() {
+        let result = derive_keys_multi_source(&[]);
+        assert!(result.is_err(), "empty seeds should fail");
+    }
+
+    #[test]
+    fn derive_hkdf_works() {
+        let seed = harvest(b"hkdf").unwrap();
+        let result = derive_hkdf::<64>(&seed, b"test");
+        assert!(result.is_ok(), "HKDF should succeed");
+        let output = result.unwrap();
+        assert_eq!(output.len(), 64, "HKDF output should be 64 bytes");
+        // Output should not be all zeros
+        assert!(!output.iter().all(|&b| b == 0), "HKDF output should not be all zeros");
+    }
+
+    #[test]
+    fn crypto_agility_key_generator_trait() {
+        let seed = harvest(b"agility").unwrap();
+        
+        // Test ML-KEM-768 generator
+        let kem_kp = MlKem768Generator::generate(&seed).unwrap();
+        let _pk_bytes = libcrux_backend::kem_pk_bytes(&kem_kp);
+        
+        // Test ML-DSA-65 generator
+        let dsa_kp = MlDsa65Generator::generate(&seed).unwrap();
+        let _vk_bytes = libcrux_backend::dsa_vk_bytes(&dsa_kp);
     }
 }
