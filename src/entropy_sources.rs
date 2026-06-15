@@ -312,6 +312,148 @@ pub fn hw_counter() -> EntropySource {
     EntropySource::from_raw("hw_counter", domain::ENTROPY_SOURCE_HW_COUNTER, raw)
 }
 
+/// Read the process ID (PID) as an entropy source.
+/// PID varies per process spawn, fork, and exec, providing entropy from
+/// OS process scheduling. This is a non-cryptographic source (defence-in-depth).
+#[cfg(feature = "std")]
+pub fn process_id() -> EntropySource {
+    use std::process;
+    let pid = process::id();
+    let mut raw = [0u8; SOURCE_LEN];
+    raw[..4].copy_from_slice(&pid.to_le_bytes());
+    EntropySource::from_raw("process_id", domain::ENTROPY_SOURCE_PROCESS_ID, raw)
+}
+
+/// `no_std` stub: no process ID available. Returns zero buffer.
+#[cfg(not(feature = "std"))]
+pub fn process_id() -> EntropySource {
+    EntropySource::from_raw("process_id", domain::ENTROPY_SOURCE_PROCESS_ID, [0u8; SOURCE_LEN])
+}
+
+/// Read the address of a heap allocation as an entropy source.
+/// Heap allocation addresses vary with ASLR, heap layout, and allocator state,
+/// providing entropy from memory layout. This is a non-cryptographic source.
+#[cfg(feature = "std")]
+pub fn memory_allocation_addr() -> EntropySource {
+    let allocation = Box::new([0u8; 64]);
+    let addr = allocation.as_ptr() as usize as u64;
+    let mut raw = [0u8; SOURCE_LEN];
+    raw[..8].copy_from_slice(&addr.to_le_bytes());
+    EntropySource::from_raw("memory_allocation_addr", domain::ENTROPY_SOURCE_MEMORY_ALLOC, raw)
+}
+
+/// Read CPU cache access timing as an entropy source.
+/// Timing of memory access patterns varies with cache state, CPU load, and
+/// memory contention, providing entropy from microarchitectural jitter.
+#[cfg(feature = "std")]
+pub fn cpu_cache_timing() -> EntropySource {
+    use std::time::Instant;
+
+    // Allocate a buffer and measure access time
+    let mut buffer = vec![0u8; 4096];
+    let start = Instant::now();
+
+    // Access pattern that stresses cache (stride by cache line size)
+    for i in (0..buffer.len()).step_by(64) {
+        buffer[i] = buffer[i].wrapping_add(1);
+    }
+
+    let elapsed = start.elapsed().as_nanos();
+    let mut raw = [0u8; SOURCE_LEN];
+    raw[..16].copy_from_slice(&elapsed.to_le_bytes());
+
+    EntropySource::from_raw("cpu_cache_timing", domain::ENTROPY_SOURCE_CPU_CACHE, raw)
+}
+
+/// Read page fault timing as an entropy source.
+/// Timing of page faults varies with memory pressure, TLB state, and OS
+/// scheduling, providing entropy from memory management jitter.
+#[cfg(feature = "std")]
+pub fn page_fault_timing() -> EntropySource {
+    use std::time::Instant;
+
+    // Allocate a large buffer to trigger page faults (64 KB = 16 pages)
+    let start = Instant::now();
+    let mut buffer = vec![0u8; 65536];
+
+    // Touch each page to trigger page faults
+    for i in (0..buffer.len()).step_by(4096) {
+        buffer[i] = 1;
+    }
+
+    let elapsed = start.elapsed().as_nanos();
+    let mut raw = [0u8; SOURCE_LEN];
+    raw[..16].copy_from_slice(&elapsed.to_le_bytes());
+
+    EntropySource::from_raw("page_fault_timing", domain::ENTROPY_SOURCE_PAGE_FAULT, raw)
+}
+
+/// Read interrupt timing as an entropy source.
+/// Timing of interrupts varies with OS scheduling, hardware interrupts, and
+/// system load, providing entropy from interrupt jitter.
+#[cfg(feature = "std")]
+pub fn interrupt_timing() -> EntropySource {
+    use std::time::Instant;
+    use std::thread;
+    use std::time::Duration;
+
+    // Sleep for a short time to allow interrupts to occur
+    let start = Instant::now();
+    thread::sleep(Duration::from_micros(100));
+    let elapsed = start.elapsed().as_nanos();
+
+    let mut raw = [0u8; SOURCE_LEN];
+    raw[..16].copy_from_slice(&elapsed.to_le_bytes());
+
+    EntropySource::from_raw("interrupt_timing", domain::ENTROPY_SOURCE_INTERRUPT, raw)
+}
+
+/// Read memory contention timing as an entropy source.
+/// Timing of memory operations under contention varies with CPU load, cache
+/// state, and memory bandwidth, providing entropy from memory contention jitter.
+#[cfg(feature = "std")]
+pub fn memory_contention_timing() -> EntropySource {
+    use std::time::Instant;
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
+    // Create contention by spawning multiple threads
+    let barrier = Arc::new(Barrier::new(5));
+    let mut handles = vec![];
+
+    for _ in 0..4 {
+        let barrier = Arc::clone(&barrier);
+        handles.push(thread::spawn(move || {
+            barrier.wait();
+            // Do some memory-intensive work
+            let mut buffer = vec![0u8; 1024];
+            for i in 0..buffer.len() {
+                buffer[i] = buffer[i].wrapping_add(1);
+            }
+        }));
+    }
+
+    let start = Instant::now();
+    barrier.wait();
+
+    // Do memory-intensive work under contention
+    let mut buffer = vec![0u8; 1024];
+    for i in 0..buffer.len() {
+        buffer[i] = buffer[i].wrapping_add(1);
+    }
+
+    let elapsed = start.elapsed().as_nanos();
+
+    for handle in handles {
+        let _ = handle.join();
+    }
+
+    let mut raw = [0u8; SOURCE_LEN];
+    raw[..16].copy_from_slice(&elapsed.to_le_bytes());
+
+    EntropySource::from_raw("memory_contention_timing", domain::ENTROPY_SOURCE_MEMORY_CONTENTION, raw)
+}
+
 /// `no_std` stub: no `Instant` available. The raw buffer is zero.
 #[cfg(not(feature = "std"))]
 pub fn hw_counter() -> EntropySource {

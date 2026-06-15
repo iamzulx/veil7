@@ -54,6 +54,18 @@ pub const ENTROPY_SOURCE_STACK_ADDR: &[u8] = b"veil7:L1:src:stack-addr:v1";
 pub const ENTROPY_SOURCE_THREAD_ID: &[u8] = b"veil7:L1:src:thread-id:v1";
 /// Domain tag for hardware counter entropy source.
 pub const ENTROPY_SOURCE_HW_COUNTER: &[u8] = b"veil7:L1:src:hw-counter:v1";
+/// Domain tag for process ID entropy source.
+pub const ENTROPY_SOURCE_PROCESS_ID: &[u8] = b"veil7:L1:src:process-id:v1";
+/// Domain tag for memory allocation address entropy source.
+pub const ENTROPY_SOURCE_MEMORY_ALLOC: &[u8] = b"veil7:L1:src:memory-alloc:v1";
+/// Domain tag for CPU cache timing entropy source.
+pub const ENTROPY_SOURCE_CPU_CACHE: &[u8] = b"veil7:L1:src:cpu-cache:v1";
+/// Domain tag for page fault timing entropy source.
+pub const ENTROPY_SOURCE_PAGE_FAULT: &[u8] = b"veil7:L1:src:page-fault:v1";
+/// Domain tag for interrupt timing entropy source.
+pub const ENTROPY_SOURCE_INTERRUPT: &[u8] = b"veil7:L1:src:interrupt:v1";
+/// Domain tag for memory contention timing entropy source.
+pub const ENTROPY_SOURCE_MEMORY_CONTENTION: &[u8] = b"veil7:L1:src:memory-contention:v1";
 
 // ── Tamper-evident chain (interface::attest_chain) ──────────────────────────
 /// Initial protocol binding for the chained SHAKE256 accumulator.

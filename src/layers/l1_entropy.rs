@@ -282,15 +282,19 @@ pub fn harvest_external(raw: &[u8; SEED_LEN]) -> Seed {
 #[cfg(feature = "std")]
 pub fn harvest_multi_source(personalization: &[u8]) -> Result<Seed, VeilError> {
     use crate::entropy_sources::{
-        hw_counter, os_csprng_primary, os_csprng_secondary, stack_addr, thread_id, wall_clock,
+        cpu_cache_timing, hw_counter, interrupt_timing, memory_allocation_addr,
+        memory_contention_timing, os_csprng_primary, os_csprng_secondary, page_fault_timing,
+        process_id, stack_addr, thread_id, wall_clock,
     };
 
-    // Collect sources. Each constructor reads its own buffer at the call
+    // Collect 12 sources. Each constructor reads its own buffer at the call
     // site; no intermediate copy. The source collection order is
     // irrelevant to the final seed (the pool is XOR-folded, order-
     // independent for a fixed set of inputs) but is kept stable for
     // determinism when the underlying entropy happens to be the same.
     let mut sources: Vec<crate::entropy_sources::EntropySource> = Vec::new();
+
+    // Original 6 sources
     sources.push(os_csprng_primary().map_err(|_| VeilError::Entropy)?);
     if let Ok(s) = os_csprng_secondary() {
         sources.push(s);
@@ -298,12 +302,22 @@ pub fn harvest_multi_source(personalization: &[u8]) -> Result<Seed, VeilError> {
     sources.push(wall_clock());
     sources.push(stack_addr());
     sources.push(thread_id());
-    // `hw_counter` may be `Result` on non-x86/non-aarch64 targets.
     #[cfg(any(target_arch = "aarch64", target_arch = "x86_64", target_arch = "x86"))]
     sources.push(hw_counter());
     #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64", target_arch = "x86")))]
     if let Ok(s) = hw_counter() {
         sources.push(s);
+    }
+
+    // 6 new sources (defence-in-depth)
+    #[cfg(feature = "std")]
+    {
+        sources.push(process_id());
+        sources.push(memory_allocation_addr());
+        sources.push(cpu_cache_timing());
+        sources.push(page_fault_timing());
+        sources.push(interrupt_timing());
+        sources.push(memory_contention_timing());
     }
 
     // Whitened XOR-fold: each source's whitened output is one-way; the

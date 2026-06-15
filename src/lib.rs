@@ -30,6 +30,7 @@ pub mod chain;
 pub mod commit_reveal;
 pub mod common;
 pub mod entropy_sources;
+pub mod entropy_health;
 pub mod execution;
 pub mod hybrid;
 pub mod keccak_ct;
