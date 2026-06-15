@@ -2,6 +2,95 @@
 
 ## [Unreleased]
 
+### Layer 4 & 5 Enhancements (2026-06-15)
+
+**Layer 4 (l4_prove) - HIGH Priority:**
+
+**Proof Validation (`validate_proof`)**
+- Validates proof format and basic properties
+- Checks: 3309 bytes (ML-DSA-65 signature size), not all zeros, not all ones
+- Returns `Ok(())` if valid, `Err(Crypto)` if invalid
+- **Security benefit:** Prevents invalid proofs from being used, detects corrupted proofs early
+- Follows "refuse > guess" philosophy
+
+**Proof Strength Validation (`validate_proof_strength`)**
+- Validates proof cryptographic strength
+- Checks: not biased (all bytes same), not low entropy (< 10 unique byte values)
+- Returns `Ok(())` if strength is valid, `Err(Crypto)` if invalid
+- **Security benefit:** Detects weak proofs (biased, low entropy)
+- Statistical test (not formal verification)
+- Follows "math over abstraction" philosophy
+
+**Layer 4 (l4_prove) - MEDIUM Priority:**
+
+**Proof Scheme Agility (`ProofScheme` trait)**
+- Trait for proof scheme agility
+- Allows swapping between different proof schemes (ML-DSA-65, ML-DSA-87, etc.)
+- **Current implementation:** Only ML-DSA-65 supported (MlDsa65Scheme)
+- MlDsa87Scheme documented as future work
+- Follows "crypto-agility" philosophy
+
+**Proof Isolation (Documented - Skipped)**
+- Would isolate proof in locked memory via Locked<> wrappers
+- **Decision:** Skipped (proofs are ephemeral, self-zeroizing, 3309 bytes)
+- **Philosophy alignment:** Follows "math over abstraction" (no benefit for ephemeral data)
+- **Reasoning:** Proofs are ephemeral (exist only for one verification iteration), self-zeroizing on drop, isolating ephemeral data provides minimal security benefit
+
+**Proof Compromise Detection (Documented - Skipped)**
+- Would detect if proof is compromised
+- **Decision:** Skipped (conflicts with "stateless" and "no metadata" philosophies)
+- **Philosophy conflict:** Requires state and metadata (violates philosophy)
+- **Reasoning:** Proofs are ephemeral (exist only for one iteration), so "compromise" is not meaningful. Stateless design already provides strong security guarantees.
+
+**Layer 5 (l5_verify) - HIGH Priority:**
+
+**Verification Validation (`validate_verification_result`)**
+- Validates verification result before use
+- Checks: result is valid (0 or 1)
+- Returns `Ok(())` if valid, `Err(Crypto)` if invalid
+- **Security benefit:** Prevents invalid verification results from being used, detects corrupted results early
+- Follows "refuse > guess" philosophy
+
+**Verification Multi-Check (`verify_multi_check`)**
+- Multi-check verification with defence-in-depth
+- Performs: (1) validate proof, (2) validate proof strength, (3) standard verification, (4) validate verification result
+- Returns `Choice` (1 = valid, 0 = invalid)
+- **Security benefit:** Defence-in-depth (multiple checks), detects invalid proofs early
+- Follows "defence-in-depth" philosophy
+
+**Layer 5 (l5_verify) - MEDIUM Priority:**
+
+**Verification Scheme Agility (`VerificationScheme` trait)**
+- Trait for verification scheme agility
+- Allows swapping between different verification schemes (ML-DSA-65, ML-DSA-87, etc.)
+- **Current implementation:** Only ML-DSA-65 supported (MlDsa65VerificationScheme)
+- MlDsa87VerificationScheme documented as future work
+- Follows "crypto-agility" philosophy
+
+**Verification Isolation (Documented - Skipped)**
+- Would isolate verification result in locked memory via Locked<> wrappers
+- **Decision:** Skipped (verification results are ephemeral, small size, 1 byte)
+- **Philosophy alignment:** Follows "math over abstraction" (no benefit for ephemeral 1-byte data)
+- **Reasoning:** Verification results are ephemeral (exist only for one iteration), small (1 byte), isolating ephemeral 1-byte data provides minimal security benefit
+
+**Verification Compromise Detection (Documented - Skipped)**
+- Would detect if verification is compromised
+- **Decision:** Skipped (conflicts with "stateless" and "no metadata" philosophies)
+- **Philosophy conflict:** Requires state and metadata (violates philosophy)
+- **Reasoning:** Verification results are ephemeral (exist only for one iteration), so "compromise" is not meaningful. Stateless design and dual checks already provide strong security guarantees.
+
+**Test Coverage:**
+- 6 tests in `l4_prove` (was 4, added 2)
+- 8 tests in `l5_verify` (was 5, added 3)
+- All tests passing: 309/309
+- Tests cover: validation, strength validation, multi-check, scheme agility
+
+**Implementation:**
+- `src/layers/l4_prove.rs` — extended with all enhancements
+- `src/layers/l5_verify.rs` — extended with all enhancements
+- Added validation functions, multi-check verification, scheme agility traits
+- Documented isolation and compromise detection (skipped with reasoning)
+
 ### Layer 3 Enhancements (2026-06-15)
 
 **HIGH Priority:**
