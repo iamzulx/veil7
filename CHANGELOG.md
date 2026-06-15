@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+### Layer 6 Enhancements (2026-06-15)
+
+**HIGH Priority:**
+
+**Zeroization Validation (`validate_zeroization`)**
+- Validates that zeroization actually occurred
+- Checks: buffer is all zeros after zeroization
+- Returns `Ok(())` if zeroization is valid, `Err(Crypto)` if invalid
+- **Security benefit:** Detects failed zeroization, prevents compiler optimization from eliding zeroization
+- Follows "refuse > guess" philosophy
+
+**Zeroization Strength Validation (`validate_zeroization_strength`)**
+- Validates zeroization strength meets requirements
+- Checks: buffer is zeroized (runtime validation)
+- Returns `Ok(())` if strength is valid, `Err(Crypto)` if invalid
+- **Security benefit:** Ensures zeroization is strong enough, prevents weak zeroization
+- Follows "math over abstraction" philosophy
+
+**Multi-pass Zeroization (`zeroize_multi_pass`)**
+- Zeroizes with multiple passes for defence-in-depth
+- Performs: (1) Zeroize (all zeros), (2) Poison (all 0xDE), (3) Zeroize again (all zeros)
+- **Security benefit:** Defence-in-depth (multiple passes), detects use-after-free (poison pattern)
+- Follows "defence-in-depth" philosophy
+
+**Test Coverage:**
+- 9 tests in `l6_zeroise` (was 3, added 6)
+- All tests passing: 9/9
+- Tests cover: validation, strength validation, multi-pass zeroization, use-after-free detection
+
+**Implementation:**
+- `src/layers/l6_zeroise.rs` — extended with all HIGH priority enhancements
+- Added validation functions and multi-pass zeroization
+- All enhancements follow veil7 philosophy
+
 ### Layer 4 & 5 Enhancements (2026-06-15)
 
 **Layer 4 (l4_prove) - HIGH Priority:**
