@@ -35,7 +35,7 @@ use crate::shake256::Shake256;
 pub trait KeyGenerator {
     /// The type of key pair generated.
     type KeyPair;
-    
+
     /// Generate a key pair from a seed.
     fn generate(seed: &Seed) -> Result<Self::KeyPair, VeilError>;
 }
@@ -45,7 +45,7 @@ pub struct MlKem768Generator;
 
 impl KeyGenerator for MlKem768Generator {
     type KeyPair = MlKem768KeyPair;
-    
+
     fn generate(seed: &Seed) -> Result<Self::KeyPair, VeilError> {
         let kem_seed = derive_hkdf::<64>(seed, domain::KEM_SEED)?;
         let kp = libcrux_backend::kem_keygen(kem_seed);
@@ -58,7 +58,7 @@ pub struct MlDsa65Generator;
 
 impl KeyGenerator for MlDsa65Generator {
     type KeyPair = MLDSA65KeyPair;
-    
+
     fn generate(seed: &Seed) -> Result<Self::KeyPair, VeilError> {
         let sig_seed = derive_hkdf::<32>(seed, domain::SIG_SEED)?;
         let kp = libcrux_backend::dsa_keygen(sig_seed);
@@ -170,7 +170,7 @@ fn derive<const N: usize>(seed: &Seed, tag: &[u8]) -> [u8; N] {
 fn derive_hkdf<const N: usize>(seed: &Seed, tag: &[u8]) -> Result<[u8; N], VeilError> {
     use hkdf::Hkdf;
     use sha2::Sha256;
-    
+
     let hk = Hkdf::<Sha256>::new(Some(tag), seed.as_bytes());
     let mut out = [0u8; N];
     hk.expand(b"veil7:kdf:v1", &mut out)
@@ -193,11 +193,11 @@ pub fn derive_keys(seed: &Seed) -> Result<EphemeralKeys, VeilError> {
     zeroize_bytes(&mut sig_seed_bytes);
 
     let keys = EphemeralKeys { kem_kp, dsa_kp };
-    
+
     // Validate keys before returning
     validate_keys(&keys)?;
     validate_key_strength(&keys)?;
-    
+
     Ok(keys)
 }
 
@@ -215,7 +215,7 @@ pub fn derive_keys_multi_source(seeds: &[Seed]) -> Result<EphemeralKeys, VeilErr
     if seeds.is_empty() {
         return Err(VeilError::Crypto);
     }
-    
+
     // Combine multiple seeds using XOR
     let mut combined_seed = [0u8; 64];
     for seed in seeds {
@@ -223,10 +223,10 @@ pub fn derive_keys_multi_source(seeds: &[Seed]) -> Result<EphemeralKeys, VeilErr
             combined_seed[i] ^= byte;
         }
     }
-    
+
     let combined = Seed::from_bytes(&combined_seed);
     zeroize_bytes(&mut combined_seed);
-    
+
     derive_keys(&combined)
 }
 
@@ -240,13 +240,13 @@ pub fn validate_keys(keys: &EphemeralKeys) -> Result<(), VeilError> {
     if !libcrux_backend::validate_kem_pk(pk_bytes) {
         return Err(VeilError::Crypto);
     }
-    
+
     // Validate ML-DSA-65 verification key
     let vk_bytes = libcrux_backend::dsa_vk_bytes(&keys.dsa_kp);
     if !libcrux_backend::validate_dsa_vk(vk_bytes) {
         return Err(VeilError::Crypto);
     }
-    
+
     Ok(())
 }
 
@@ -261,13 +261,13 @@ pub fn validate_key_strength(keys: &EphemeralKeys) -> Result<(), VeilError> {
     if pk_bytes.len() != 1184 {
         return Err(VeilError::Crypto);
     }
-    
+
     // ML-DSA-65 should have 1952-byte verification key
     let vk_bytes = libcrux_backend::dsa_vk_bytes(&keys.dsa_kp);
     if vk_bytes.len() != 1952 {
         return Err(VeilError::Crypto);
     }
-    
+
     Ok(())
 }
 
@@ -422,11 +422,11 @@ mod tests {
     #[test]
     fn crypto_agility_key_generator_trait() {
         let seed = harvest(b"agility").unwrap();
-        
+
         // Test ML-KEM-768 generator
         let kem_kp = MlKem768Generator::generate(&seed).unwrap();
         let _pk_bytes = libcrux_backend::kem_pk_bytes(&kem_kp);
-        
+
         // Test ML-DSA-65 generator
         let dsa_kp = MlDsa65Generator::generate(&seed).unwrap();
         let _vk_bytes = libcrux_backend::dsa_vk_bytes(&dsa_kp);
