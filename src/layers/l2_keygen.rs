@@ -416,7 +416,10 @@ mod tests {
         let output = result.unwrap();
         assert_eq!(output.len(), 64, "HKDF output should be 64 bytes");
         // Output should not be all zeros
-        assert!(!output.iter().all(|&b| b == 0), "HKDF output should not be all zeros");
+        assert!(
+            !output.iter().all(|&b| b == 0),
+            "HKDF output should not be all zeros"
+        );
     }
 
     #[test]

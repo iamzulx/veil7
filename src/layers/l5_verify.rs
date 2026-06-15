@@ -46,12 +46,12 @@ pub trait Verifier {
 /// - Follows "refuse > guess" philosophy
 pub fn validate_verification_result(result: &Choice) -> Result<(), VeilError> {
     let value = result.unwrap_u8();
-    
+
     // Check result is valid (0 or 1)
     if value != 0 && value != 1 {
         return Err(VeilError::Crypto);
     }
-    
+
     Ok(())
 }
 
@@ -75,13 +75,13 @@ pub fn verify_multi_check(
     // Check 1: Validate proof
     crate::l4_prove::validate_proof(proof)?;
     crate::l4_prove::validate_proof_strength(proof)?;
-    
+
     // Check 2: Standard verification
     let standard_result = MlDsaVerifier::verify(keys, claim, proof)?;
-    
+
     // Check 3: Validate verification result
     validate_verification_result(&standard_result)?;
-    
+
     Ok(standard_result)
 }
 
@@ -131,12 +131,8 @@ pub struct MlDsa65VerificationScheme;
 
 impl VerificationScheme for MlDsa65VerificationScheme {
     type ProofType = Proof;
-    
-    fn verify(
-        keys: &EphemeralKeys,
-        claim: &[u8],
-        proof: &Proof,
-    ) -> Result<Choice, VeilError> {
+
+    fn verify(keys: &EphemeralKeys, claim: &[u8], proof: &Proof) -> Result<Choice, VeilError> {
         MlDsaVerifier::verify(keys, claim, proof)
     }
 }
@@ -146,12 +142,8 @@ pub struct MlDsa87VerificationScheme;
 
 impl VerificationScheme for MlDsa87VerificationScheme {
     type ProofType = Proof;
-    
-    fn verify(
-        _keys: &EphemeralKeys,
-        _claim: &[u8],
-        _proof: &Proof,
-    ) -> Result<Choice, VeilError> {
+
+    fn verify(_keys: &EphemeralKeys, _claim: &[u8], _proof: &Proof) -> Result<Choice, VeilError> {
         // Future: Implement ML-DSA-87 verification
         Err(VeilError::Crypto) // Not yet implemented
     }
@@ -380,7 +372,7 @@ mod tests {
     fn validate_verification_result_accepts_valid_result() {
         let valid_choice = Choice::from(1);
         assert!(validate_verification_result(&valid_choice).is_ok());
-        
+
         let invalid_choice = Choice::from(0);
         assert!(validate_verification_result(&invalid_choice).is_ok());
     }

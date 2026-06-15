@@ -56,17 +56,17 @@ impl Commitment {
 /// use `validate_commitment_strength()`.
 pub fn validate_commitment(commitment: &Commitment) -> Result<(), VeilError> {
     let bytes = commitment.as_bytes();
-    
+
     // Check not all zeros
     if bytes.iter().all(|&b| b == 0) {
         return Err(VeilError::Crypto);
     }
-    
+
     // Check not all ones
     if bytes.iter().all(|&b| b == 0xFF) {
         return Err(VeilError::Crypto);
     }
-    
+
     Ok(())
 }
 
@@ -82,13 +82,13 @@ pub fn validate_commitment(commitment: &Commitment) -> Result<(), VeilError> {
 /// verification (e.g., Kani proofs).
 pub fn validate_commitment_strength(commitment: &Commitment) -> Result<(), VeilError> {
     let bytes = commitment.as_bytes();
-    
+
     // Check for obvious bias (all bytes same value)
     let first_byte = bytes[0];
     if bytes.iter().all(|&b| b == first_byte) {
         return Err(VeilError::Crypto);
     }
-    
+
     // Check for low entropy (less than 4 unique byte values)
     let mut unique_bytes = [false; 256];
     let mut unique_count = 0;
@@ -98,11 +98,11 @@ pub fn validate_commitment_strength(commitment: &Commitment) -> Result<(), VeilE
             unique_count += 1;
         }
     }
-    
+
     if unique_count < 4 {
         return Err(VeilError::Crypto);
     }
-    
+
     Ok(())
 }
 
@@ -155,7 +155,7 @@ pub fn commit_multi_source(
     xof.update(kem_pk_bytes.as_slice());
     xof.update(dsa_vk_bytes.as_slice());
     xof.update(claim);
-    xof.update(additional_context);  // Additional binding
+    xof.update(additional_context); // Additional binding
 
     let mut out = [0u8; COMMITMENT_LEN];
     let mut reader = xof.finalize_xof();
@@ -326,8 +326,8 @@ mod tests {
     fn validate_commitment_strength_rejects_low_entropy() {
         // Only 2 unique byte values (low entropy)
         let mut bytes = [0u8; COMMITMENT_LEN];
-        for i in 0..COMMITMENT_LEN {
-            bytes[i] = if i % 2 == 0 { 0x00 } else { 0x01 };
+        for (i, byte) in bytes.iter_mut().enumerate() {
+            *byte = if i % 2 == 0 { 0x00 } else { 0x01 };
         }
         let c = Commitment(bytes);
         assert!(validate_commitment_strength(&c).is_err());
@@ -339,7 +339,10 @@ mod tests {
         let keys = derive_keys(&seed).unwrap();
         let c1 = commit_multi_source(&keys, b"claim", b"context-A");
         let c2 = commit_multi_source(&keys, b"claim", b"context-B");
-        assert_ne!(c1, c2, "different context should produce different commitments");
+        assert_ne!(
+            c1, c2,
+            "different context should produce different commitments"
+        );
     }
 
     #[test]

@@ -55,22 +55,22 @@ impl Drop for Proof {
 /// - Follows "refuse > guess" philosophy
 pub fn validate_proof(proof: &Proof) -> Result<(), VeilError> {
     let sig_bytes = proof.sig.as_slice();
-    
+
     // Check signature size (must be 3309 bytes for ML-DSA-65)
     if sig_bytes.len() != libcrux_backend::DSA_SIG_SIZE {
         return Err(VeilError::Crypto);
     }
-    
+
     // Check signature is not all zeros
     if sig_bytes.iter().all(|&b| b == 0) {
         return Err(VeilError::Crypto);
     }
-    
+
     // Check signature is not all ones
     if sig_bytes.iter().all(|&b| b == 0xFF) {
         return Err(VeilError::Crypto);
     }
-    
+
     Ok(())
 }
 
@@ -88,13 +88,13 @@ pub fn validate_proof(proof: &Proof) -> Result<(), VeilError> {
 /// - Follows "math over abstraction" philosophy
 pub fn validate_proof_strength(proof: &Proof) -> Result<(), VeilError> {
     let sig_bytes = proof.sig.as_slice();
-    
+
     // Check for obvious bias (all bytes same value)
     let first_byte = sig_bytes[0];
     if sig_bytes.iter().all(|&b| b == first_byte) {
         return Err(VeilError::Crypto);
     }
-    
+
     // Check for low entropy (less than 10 unique byte values)
     let mut unique_bytes = [false; 256];
     let mut unique_count = 0;
@@ -104,11 +104,11 @@ pub fn validate_proof_strength(proof: &Proof) -> Result<(), VeilError> {
             unique_count += 1;
         }
     }
-    
+
     if unique_count < 10 {
         return Err(VeilError::Crypto);
     }
-    
+
     Ok(())
 }
 
@@ -154,7 +154,7 @@ pub struct MlDsa65Scheme;
 
 impl ProofScheme for MlDsa65Scheme {
     type ProofType = Proof;
-    
+
     fn prove(keys: &EphemeralKeys, commitment: &Commitment) -> Result<Proof, VeilError> {
         MlDsaProver::prove(keys, commitment)
     }
@@ -165,7 +165,7 @@ pub struct MlDsa87Scheme;
 
 impl ProofScheme for MlDsa87Scheme {
     type ProofType = Proof;
-    
+
     fn prove(_keys: &EphemeralKeys, _commitment: &Commitment) -> Result<Proof, VeilError> {
         // Future: Implement ML-DSA-87
         Err(VeilError::Crypto) // Not yet implemented
