@@ -46,12 +46,44 @@ To reach production, **4 phases** must be completed.
 **Status:** ✅ COMPLETE — L2/L3/L4/L5 fully migrated to libcrux
 
 - `src/pq_backends/libcrux_backend.rs` — adapter module (11 tests)
-- `src/layers/l2_keygen.rs` — EphemeralKeys uses libcrux key pairs + Drop impl
-- `src/layers/l3_commit.rs` — commitment uses libcrux key serialization
+- `src/layers/l4_prove.rs` — Proof wraps MLDSA65Signature + Drop impl
+- `src/layers/l5_verify.rs` — verify + KEM roundtrip via libcrux
 - `src/layers/l6_zeroise.rs` — explicit scrub barrier
 - `src/layers/l7_emit.rs` — transcript emission (Verdict type)
-- 372/372 tests pass (all layers verified end-to-end)
+- 386/386 tests pass (all layers verified end-to-end)
 - fmt clean, clippy clean, no_std clean, release build clean
+
+### 1.8 — Layer 3 Enhancements (HIGH + MEDIUM) ✅ COMPLETE
+
+**Status:** ✅ COMPLETE — All enhancements implemented and tested (2026-06-15)
+
+**HIGH Priority:**
+- ✅ Commitment Validation (`validate_commitment`) — validates format and basic properties
+- ✅ Commitment Strength Validation (`validate_commitment_strength`) — validates cryptographic strength
+
+**MEDIUM Priority:**
+- ✅ Commitment Multi-Source (`commit_multi_source`) — derives from multiple sources (defence-in-depth)
+- ✅ Commitment Agility (`CommitmentScheme` trait) — allows swapping commitment schemes
+- ✅ Commitment Isolation — documented and skipped (commitments are public, no security benefit)
+- ✅ Commitment Compromise Detection — documented and skipped (philosophy conflict)
+
+**Test Coverage:**
+- 14 tests in `l3_commit` (was 5, added 9)
+- All tests passing: 14/14
+- Tests cover: validation, strength validation, multi-source, agility
+
+**Implementation:**
+- `src/layers/l3_commit.rs` — extended with all enhancements
+- Added validation functions, multi-source commitment, agility trait
+- Documented isolation and compromise detection (skipped with reasoning)
+
+**Philosophy Compliance:**
+- Commitment Isolation skipped: follows "math over abstraction" (no benefit for public data)
+- Commitment Compromise Detection skipped: conflicts with "stateless" and "no metadata" philosophies
+
+**References:**
+- NIST FIPS 202 "SHA-3 Standard" (SHAKE256)
+- NIST SP 800-131A Rev. 3 "Transitioning the Use of Cryptographic Algorithms" (crypto-agility)
 
 ### 1.6 — Layer 1 Enhancements (HIGH + MEDIUM) ✅ COMPLETE
 

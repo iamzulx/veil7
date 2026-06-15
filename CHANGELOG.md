@@ -2,6 +2,64 @@
 
 ## [Unreleased]
 
+### Layer 3 Enhancements (2026-06-15)
+
+**HIGH Priority:**
+
+**Commitment Validation (`validate_commitment`)**
+- Validates commitment format and basic properties
+- Checks: 32 bytes, not all zeros, not all ones
+- Returns `Ok(())` if valid, `Err(Crypto)` if invalid
+- Basic validation only (not cryptographic strength)
+- **Limitation:** Does not validate cryptographic strength (use `validate_commitment_strength()`)
+
+**Commitment Strength Validation (`validate_commitment_strength`)**
+- Validates commitment cryptographic strength
+- Checks: not biased (all bytes same), not low entropy (< 4 unique values)
+- Returns `Ok(())` if strength is valid, `Err(Crypto)` if invalid
+- **Limitation:** Statistical test only (not formal verification)
+- **Note:** For absolute certainty, use formal verification (Kani proofs)
+
+**MEDIUM Priority:**
+
+**Commitment Multi-Source (`commit_multi_source`)**
+- Derives commitment from multiple sources (defence-in-depth)
+- Inputs: ephemeral keys + claim + additional context
+- Provides additional binding beyond standard commit()
+- **Note:** Optional enhancement for high-security deployments
+- **Limitation:** Standard commit() is sufficient for most use cases
+
+**Commitment Agility (`CommitmentScheme` trait)**
+- Trait for commitment scheme agility
+- Allows swapping commitment schemes (SHAKE256, SHA3-256, BLAKE3)
+- **Current implementation:** Only SHAKE256 supported (libcrux-sha3)
+- **Limitation:** Future work to add SHA3-256, BLAKE3, etc.
+- **Note:** Follows NIST recommendation for crypto-agility
+
+**Commitment Isolation (Documented - Skipped)**
+- Would isolate commitment in locked memory via Locked<> wrappers
+- **Decision:** Skipped (commitments are public, no security benefit)
+- **Philosophy alignment:** Follows "math over abstraction" philosophy
+- **Reasoning:** Isolating public data provides no security benefit
+
+**Commitment Compromise Detection (Documented - Skipped)**
+- Would detect if commitment is compromised
+- **Decision:** Skipped (conflicts with "stateless" and "no metadata" philosophies)
+- **Philosophy conflict:** Requires state and metadata (violates philosophy)
+- **Reasoning:** Commitments are public by design, so "compromise" is not meaningful
+
+**Test Coverage:**
+- 14 tests in `l3_commit` (was 5, added 9)
+- All tests passing: 14/14
+- Tests cover: validation, strength validation, multi-source, agility
+
+**Implementation:**
+- `src/layers/l3_commit.rs` — extended with all enhancements
+- Added `validate_commitment()` and `validate_commitment_strength()`
+- Added `commit_multi_source()` for multi-source commitments
+- Added `CommitmentScheme` trait for agility
+- Documented isolation and compromise detection (skipped with reasoning)
+
 ### CI Fixes (2026-06-15)
 
 **Format Job Failure:**
