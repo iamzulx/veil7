@@ -35,6 +35,8 @@ slh-dsa = { version = "0.2.0-rc.5", default-features = false, features = ["zeroi
 
 # --- Hashing / XOF (formally verified, constant-time) ---
 libcrux-sha3 = "0.0.9"  # SHAKE256 XOF (libcrux, hax/F* verified, no T-tables)
+sha2 = "0.10"  # SHA-256 for HKDF (needed by hkdf crate, NIST SP 800-56C)
+hkdf = "0.12"  # HKDF for stronger key derivation (NIST SP 800-56C)
 
 # --- Memory hygiene + constant-time ---
 zeroize = { version = "1", features = ["derive"] }
@@ -58,9 +60,3 @@ debug = "line-tables-only"
 [profile.dev]
 debug = false       # no debuginfo trace even in dev
 # no panic="abort" here -- the test harness needs unwind
-
-# ── WASM target ──────────────────────────────────────────────────────────────
-# Build for browser/serverless with:
-#   cargo build --target wasm32-unknown-unknown --no-default-features
-# The no_std build is WASM-compatible. Entropy must be supplied externally
-# (e.g. via crypto.getRandomValues() in the browser).

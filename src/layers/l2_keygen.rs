@@ -68,6 +68,27 @@ fn derive<const N: usize>(seed: &Seed, tag: &[u8]) -> [u8; N] {
     out
 }
 
+/// Derive `N` bytes from the master seed using HKDF-SHA256 (NIST SP 800-56C).
+///
+/// This is a stronger KDF than plain SHAKE256, recommended by NIST for
+/// key derivation. HKDF provides better security margins and is the
+/// standard approach for key derivation.
+///
+/// Note: Uses SHA-256 instead of SHAKE256 because HKDF requires a fixed-output
+/// hash function, not an XOF (extendable output function).
+///
+/// Reference: NIST SP 800-56C "Recommendation for Key-Derivation Methods"
+fn derive_hkdf<const N: usize>(seed: &Seed, tag: &[u8]) -> Result<[u8; N], VeilError> {
+    use hkdf::Hkdf;
+    use sha2::Sha256;
+    
+    let hk = Hkdf::<Sha256>::new(Some(tag), seed.as_bytes());
+    let mut out = [0u8; N];
+    hk.expand(b"veil7:kdf:v1", &mut out)
+        .map_err(|_| VeilError::Crypto)?;
+    Ok(out)
+}
+
 /// Derive both ephemeral PQ keypairs from a freshly harvested seed.
 ///
 /// Uses libcrux (formally verified via hax/F*) instead of RustCrypto.
