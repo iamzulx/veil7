@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! libcrux backend adapter — formally verified PQ primitives.
 //!
 //! Wraps `libcrux-ml-kem` and `libcrux-ml-dsa` to provide the same

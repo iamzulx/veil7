@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! Entropy health testing and monitoring.
 //!
 //! Implements health tests for entropy sources as recommended by NIST SP 800-90B:

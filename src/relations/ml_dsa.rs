@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! ML-DSA relation — knowledge of an ML-DSA-65 signing key (libcrux backend).
 //!
 //! This wraps the lattice signature scheme (FIPS 204) as a [`Relation`], proving

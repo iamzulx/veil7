@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! L2 — Ephemeral Keygen (libcrux backend).
 //!
 //! Deterministically derives two independent post-quantum keypairs from the L1

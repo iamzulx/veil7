@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! veil7 — stateless 7-layer universal post-quantum verification engine.
 //!
 //! Invariants (enforced by construction, not by policy):

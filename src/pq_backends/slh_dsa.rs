@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! Formal SLH-DSA / FIPS 205 backend.
 //!
 //! SLH-DSA-SHAKE-128f is a stateless hash-based post-quantum signature scheme

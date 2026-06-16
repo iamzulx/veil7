@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! L3 — Commitment (libcrux backend).
 //!
 //! Binds the claim to the ephemeral identity. Produces a domain-separated

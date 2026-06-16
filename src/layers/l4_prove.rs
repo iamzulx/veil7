@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! L4 — Proof Generation (libcrux backend).
 //!
 //! Produces a post-quantum proof that the holder of the ephemeral secret key

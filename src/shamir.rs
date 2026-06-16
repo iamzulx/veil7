@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! Shamir Secret Sharing for entropy — the seed never exists as one object.
 //!
 //! Splits a 64-byte seed into `n` shares such that any `t` shares can

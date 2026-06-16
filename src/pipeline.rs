@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! Pipeline — stateless orchestration of L1 → L7.
 //!
 //! One call to [`verify_once`] runs a complete, self-contained iteration:

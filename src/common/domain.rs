@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! Domain-separation tags.
 //!
 //! Distinct constants prevent cross-protocol collisions in the single SHAKE256

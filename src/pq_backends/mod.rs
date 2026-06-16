@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! Formal post-quantum signature backends.
 //!
 //! These provide direct access to RustCrypto PQ implementations with

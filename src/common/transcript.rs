@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! Fiat-Shamir transcript — a SHAKE256-backed public-coin random oracle.
 //!
 //! This is the heart of the non-interactive proof machinery. A prover and a

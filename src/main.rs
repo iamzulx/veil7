@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! veil7 CLI — the only file that may print.
 //!
 //! All library code is silent; output comes only from here.

@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! Blind attestation — the engine attests data it never sees.
 //!
 //! The caller blinds the claim with a random mask before sending it to the

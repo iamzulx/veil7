@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! Range proof relation — prove a value is within [min, max] without revealing it.
 //!
 //! Proves: "I know a value `v` such that `min ≤ v ≤ max`" without revealing `v`.

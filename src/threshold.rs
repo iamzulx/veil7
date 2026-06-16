@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! Threshold verification — N-of-M distributed trust.
 //!
 //! Run the same claim through M independent engine iterations and require

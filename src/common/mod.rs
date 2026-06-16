@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! Foundational shared types used across every layer.
 //!
 //! Named `common` rather than `core` deliberately: a module literally named

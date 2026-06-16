@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! Hash-preimage relation — a Lamport one-time proof of knowledge, made
 //! non-interactive with Fiat-Shamir.
 //!

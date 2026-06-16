@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! Storage primitives — oblivious memory and integrity structures.
 //!
 //! Privacy property: every access pattern is independent of the logical

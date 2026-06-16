@@ -1,4 +1,6 @@
 // Author: Iamzulx
+// Copyright (c) 2026
+// License: MIT
 //! Execution primitives — isolated, deterministic bytecode execution.
 //!
 //! No side effects, no file I/O, no allocation during execution.
