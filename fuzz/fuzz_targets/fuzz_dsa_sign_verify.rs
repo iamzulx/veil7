@@ -29,7 +29,7 @@ fuzz_target!(|data: &[u8]| {
     }
 
     let sig = match veil7::pq_backends::libcrux_backend::dsa_sign(
-        veil7::pq_backends::libcrux_backend::dsa_sk_bytes(&kp),
+        &kp.signing_key,
         message,
         ctx,
         randomness,
@@ -39,10 +39,12 @@ fuzz_target!(|data: &[u8]| {
     };
 
     // Verify the signature
-    let vk = veil7::pq_backends::libcrux_backend::dsa_vk_from_bytes(
-        veil7::pq_backends::libcrux_backend::dsa_vk_bytes(&kp),
+    let result = veil7::pq_backends::libcrux_backend::dsa_verify(
+        &kp.verification_key,
+        message,
+        ctx,
+        &sig,
     );
-    let result = veil7::pq_backends::libcrux_backend::dsa_verify(&vk, &sig, message, ctx);
 
     // Valid signature must verify
     assert!(result.is_ok(), "valid signature must verify");

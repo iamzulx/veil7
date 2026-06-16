@@ -1,9 +1,14 @@
-# Rust build artifacts
-/target/
+# Fuzz testing artifacts
+fuzz/target/
+fuzz/Cargo.lock
 
-# Backup / editor junk
-*.bak
-*~
-*.swp
+# Build artifacts
+target/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
 .DS_Store
-sbom.json
+Thumbs.db
