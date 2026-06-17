@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Code Quality & Philosophy Hardening (2026-06-17)
+
+**Clippy & Formatting:**
+- Resolved all `cargo fmt --check` warnings (trailing whitespace, long lines, inconsistent spacing)
+- Resolved all `cargo clippy --all-targets -- -D warnings` errors across 6 files
+- Replaced `needless_range_loop` with iterator `enumerate()` in `l7_emit.rs`, `stress_comprehensive.rs`
+- Prefixed unused test variables with `_` in `l0_memlock.rs` (Android mlock guard)
+- Replaced `vec![]` with array literal in `stress_comprehensive.rs`
+- Added `#[allow(clippy::new_ret_no_self)]` on `VerdictScheme` trait in `l7_emit.rs`
+
+**Philosophy Hardening:**
+- `entropy_health.rs`: Replaced `counts.iter().max().unwrap()` with explicit manual max loop — eliminates panic surface ("Refuse > guess")
+- `execution/vm.rs`: Replaced `_ => unreachable!()` with `wipe_state()` + `return [0u8; 64]` — silent defense-in-depth ("Wipe > leak", "Silence > explanation")
+
+**Verification:**
+- `cargo fmt --check`: PASS
+- `cargo clippy --all-targets -- -D warnings`: PASS
+- `cargo test --lib --release`: 323 passed, 0 failed
+
 ### Documentation (2026-06-15)
 
 **Layer-by-Layer Documentation:**

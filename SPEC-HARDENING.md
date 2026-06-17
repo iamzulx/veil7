@@ -416,3 +416,22 @@ cargo audit --deny warnings
 4. FIPS 205 draft/final context: SLH-DSA.
 5. `subtle` crate docs: <https://docs.rs/subtle>
 6. `zeroize` crate docs: <https://docs.rs/zeroize>
+### Panic-free hardening (2026-06-17)
+
+All `unreachable!()`, `unwrap()`, and `panic!()` paths in library code
+(non-test, non-`main.rs`) have been eliminated or hardened:
+
+- **`execution/vm.rs`**: The catch-all `_ => unreachable!()` in the
+  opcode dispatch was replaced with `self.wipe_state(); return [0u8; 64]`.
+  This ensures that an unknown opcode triggers silent state wipe rather
+  than a panic that could leak stack traces. Follows "Wipe > leak" and
+  "Silence > explanation" philosophy.
+- **`entropy_health.rs`**: `counts.iter().max().unwrap()` replaced with
+  explicit manual max loop. Eliminates panic surface on empty iterator
+  (even though the array is always non-empty). Follows "Refuse > guess"
+  philosophy.
+
+Verification: `cargo clippy --all-targets -- -D warnings` passes with zero
+warnings. No `unwrap()`, `expect()`, `panic!()`, or `unreachable!()` in
+library production paths.
+

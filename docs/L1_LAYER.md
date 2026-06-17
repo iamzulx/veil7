@@ -225,16 +225,22 @@ fn repetition_count_test(sample: u32, state: &mut RctState) -> Result<()> {
 Detects distribution bias:
 
 ```rust
-fn adaptive_proportion_test(samples: &[u32], state: &mut AptState) -> Result<()> {
-    let max_count = count_most_frequent(samples);
-    if max_count >= state.cutoff {
-        return Err(VeilError::EntropyHealthTestFailed);
+fn adaptive_proportion_test(samples: &[u8], cutoff: usize) -> bool {
+    let mut counts = [0usize; 256];
+    for sample in samples {
+        counts[sample as usize] += 1;
     }
-    Ok(())
+    let mut max_count = 0usize;
+    for count in counts {
+        if count > max_count {
+            max_count = count;
+        }
+    }
+    max_count < cutoff
 }
 ```
 
-**Window size**: 1024 samples.  
+**Window size**: 1024 samples.
 **Cutoff**: Based on binomial distribution for min-entropy.
 
 ### 3.4 Mixing Function
@@ -347,8 +353,8 @@ Final conditioning through SHAKE256.
 
 ```rust
 fn repetition_count_test(sample: u32, state: &mut RctState) -> Result<()>
-fn adaptive_proportion_test(samples: &[u32], state: &mut AptState) -> Result<()>
-fn estimate_min_entropy(samples: &[u32]) -> f64
+fn adaptive_proportion_test(samples: &[u8], cutoff: usize) -> bool
+fn estimate_min_entropy(samples: &[u8]) -> f64
 ```
 
 ---
