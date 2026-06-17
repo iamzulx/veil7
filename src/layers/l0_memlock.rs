@@ -335,6 +335,78 @@ pub(crate) fn zeroize_and_poison(bytes: &mut [u8]) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Hardware RNG (unsafe confined to this module)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Try to read a u64 from the hardware random number generator.
+/// Safe wrapper — all `unsafe` is confined here in l0_memlock.
+pub(crate) fn hw_random_u64() -> Result<u64, ()> {
+    #[cfg(target_arch = "x86_64")]
+    {
+        hw_rdrand64()
+    }
+    #[cfg(all(target_arch = "aarch64", feature = "std"))]
+    {
+        hw_rndr64()
+    }
+    #[cfg(all(target_arch = "aarch64", not(feature = "std")))]
+    {
+        Err(())
+    }
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    {
+        Err(())
+    }
+}
+
+/// RDRAND — x86_64 hardware random number.
+#[cfg(target_arch = "x86_64")]
+fn hw_rdrand64() -> Result<u64, ()> {
+    let val: u64;
+    let ok: u8;
+    unsafe {
+        core::arch::asm!(
+            "rdrand {val}",
+            "setc {ok}",
+            val = out(reg) val,
+            ok = out(reg_byte) ok,
+            options(nomem, nostack),
+        );
+    }
+    if ok != 0 {
+        Ok(val)
+    } else {
+        Err(())
+    }
+}
+
+/// RNDR — aarch64 hardware random number (ARMv8.5-A FEAT_RNG).
+#[cfg(all(target_arch = "aarch64", feature = "std"))]
+fn hw_rndr64() -> Result<u64, ()> {
+    const HWCAP_RNG: libc::c_ulong = 1 << 27;
+    let hwcap = unsafe { libc::getauxval(libc::AT_HWCAP) };
+    if hwcap & HWCAP_RNG == 0 {
+        return Err(());
+    }
+    let val: u64;
+    let nzcv: u64;
+    unsafe {
+        core::arch::asm!(
+            "mrs {val}, s3_3_c2_c4_0",
+            "mrs {out}, nzcv",
+            val = out(reg) val,
+            out = out(reg) nzcv,
+            options(nomem, nostack),
+        );
+    }
+    if (nzcv & (1 << 30)) == 0 {
+        Ok(val)
+    } else {
+        Err(())
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Memory Canaries (Buffer Overflow Detection)
 // ═══════════════════════════════════════════════════════════════════════════
 
