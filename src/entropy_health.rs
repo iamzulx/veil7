@@ -83,7 +83,12 @@ pub fn adaptive_proportion_test(samples: &[u8], cutoff: usize) -> bool {
         counts[sample as usize] += 1;
     }
 
-    let max_count = *counts.iter().max().unwrap();
+    let mut max_count = 0usize;
+    for count in counts {
+        if count > max_count {
+            max_count = count;
+        }
+    }
     max_count < cutoff
 }
 
@@ -114,7 +119,12 @@ pub fn estimate_min_entropy(samples: &[u8]) -> f64 {
         counts[sample as usize] += 1;
     }
 
-    let max_count = *counts.iter().max().unwrap();
+    let mut max_count = 0usize;
+    for count in counts {
+        if count > max_count {
+            max_count = count;
+        }
+    }
     let max_prob = max_count as f64 / samples.len() as f64;
 
     if max_prob <= 0.0 {

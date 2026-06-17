@@ -298,7 +298,10 @@ impl MicroVM {
                             let (_, borrow) = a.overflowing_sub(b);
                             borrow as u64
                         }
-                        _ => unreachable!(),
+                        _ => {
+                            self.wipe_state();
+                            return [0u8; 64];
+                        }
                     };
                     // Absorb result into trace.
                     trace.update(&result.to_le_bytes());

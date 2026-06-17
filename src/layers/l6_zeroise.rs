@@ -78,7 +78,7 @@ pub fn validate_zeroization(buffer: &[u8]) -> Result<(), crate::VeilError> {
     if !buffer.iter().all(|&b| b == 0) {
         return Err(crate::VeilError::Crypto);
     }
-    
+
     Ok(())
 }
 
@@ -103,7 +103,7 @@ pub fn validate_zeroization_strength(buffer: &[u8]) -> Result<(), crate::VeilErr
     if !buffer.iter().all(|&b| b == 0) {
         return Err(crate::VeilError::Crypto);
     }
-    
+
     Ok(())
 }
 
@@ -121,10 +121,10 @@ pub fn validate_zeroization_strength(buffer: &[u8]) -> Result<(), crate::VeilErr
 pub fn zeroize_multi_pass(buffer: &mut [u8]) {
     // Pass 1: Zeroize
     zeroize_bytes(buffer);
-    
+
     // Pass 2: Poison
     crate::l0_memlock::poison_bytes(buffer);
-    
+
     // Pass 3: Zeroize again
     zeroize_bytes(buffer);
 }
@@ -218,23 +218,29 @@ mod tests {
     fn zeroize_multi_pass_zeroizes_buffer() {
         let mut buffer = [0xAAu8; 32];
         zeroize_multi_pass(&mut buffer);
-        assert!(buffer.iter().all(|&b| b == 0), "buffer should be all zeros after multi-pass zeroization");
+        assert!(
+            buffer.iter().all(|&b| b == 0),
+            "buffer should be all zeros after multi-pass zeroization"
+        );
     }
 
     #[test]
     fn zeroize_multi_pass_detects_use_after_free() {
         let mut buffer = [0xAAu8; 32];
-        
+
         // Pass 1: Zeroize
         zeroize_bytes(&mut buffer);
         assert!(buffer.iter().all(|&b| b == 0), "pass 1 should zeroize");
-        
+
         // Pass 2: Poison
         crate::l0_memlock::poison_bytes(&mut buffer);
         assert!(buffer.iter().all(|&b| b == 0xDE), "pass 2 should poison");
-        
+
         // Pass 3: Zeroize again
         zeroize_bytes(&mut buffer);
-        assert!(buffer.iter().all(|&b| b == 0), "pass 3 should zeroize again");
+        assert!(
+            buffer.iter().all(|&b| b == 0),
+            "pass 3 should zeroize again"
+        );
     }
 }

@@ -47,8 +47,8 @@ fn stress_test_all_ones_claim() {
 #[test]
 fn stress_test_alternating_pattern() {
     let mut claim = vec![0u8; 1024];
-    for i in 0..claim.len() {
-        claim[i] = if i % 2 == 0 { 0xAA } else { 0x55 };
+    for (i, item) in claim.iter_mut().enumerate() {
+        *item = if i % 2 == 0 { 0xAA } else { 0x55 };
     }
     let claim = Claim::new(&claim);
     let result = verify_once(&claim);
@@ -119,8 +119,8 @@ fn stress_test_unicode_characters() {
 #[test]
 fn stress_test_control_characters() {
     let mut claim = vec![0u8; 256];
-    for i in 0..32 {
-        claim[i] = i as u8; // Control characters 0-31
+    for (i, item) in claim.iter_mut().take(32).enumerate() {
+        *item = i as u8; // Control characters 0-31
     }
     let claim = Claim::new(&claim);
     let result = verify_once(&claim);
@@ -130,8 +130,8 @@ fn stress_test_control_characters() {
 #[test]
 fn stress_test_high_bytes() {
     let mut claim = vec![0u8; 256];
-    for i in 0..256 {
-        claim[i] = i as u8; // All byte values 0-255
+    for (i, item) in claim.iter_mut().enumerate() {
+        *item = i as u8; // All byte values 0-255
     }
     let claim = Claim::new(&claim);
     let result = verify_once(&claim);
@@ -146,39 +146,64 @@ fn stress_test_high_bytes() {
 fn stress_test_no_metadata_in_verdict() {
     let claim = Claim::new(b"test claim");
     let verdict = verify_once(&claim).unwrap();
-    
+
     // Check that verdict only contains valid and transcript
     let debug_str = format!("{:?}", verdict);
-    
+
     // Should only contain "valid" and "transcript"
     assert!(debug_str.contains("valid"), "debug should contain 'valid'");
-    assert!(debug_str.contains("transcript"), "debug should contain 'transcript'");
-    
+    assert!(
+        debug_str.contains("transcript"),
+        "debug should contain 'transcript'"
+    );
+
     // Should NOT contain metadata (check for full words, not substrings)
-    assert!(!debug_str.contains("timestamp"), "debug should NOT contain timestamp");
-    assert!(!debug_str.contains("sequence"), "debug should NOT contain sequence");
-    assert!(!debug_str.contains("session"), "debug should NOT contain session");
+    assert!(
+        !debug_str.contains("timestamp"),
+        "debug should NOT contain timestamp"
+    );
+    assert!(
+        !debug_str.contains("sequence"),
+        "debug should NOT contain sequence"
+    );
+    assert!(
+        !debug_str.contains("session"),
+        "debug should NOT contain session"
+    );
     // Note: "id" is a substring of "valid", so we only check for " id " (with spaces)
-    assert!(!debug_str.contains(" id "), "debug should NOT contain ' id '");
+    assert!(
+        !debug_str.contains(" id "),
+        "debug should NOT contain ' id '"
+    );
     // Note: "id:" is a substring of "valid:", so we don't check for it
     assert!(!debug_str.contains("key"), "debug should NOT contain key");
-    assert!(!debug_str.contains("signature"), "debug should NOT contain signature");
-    assert!(!debug_str.contains("claim"), "debug should NOT contain claim");
+    assert!(
+        !debug_str.contains("signature"),
+        "debug should NOT contain signature"
+    );
+    assert!(
+        !debug_str.contains("claim"),
+        "debug should NOT contain claim"
+    );
 }
 
 #[test]
 fn stress_test_no_timestamp_in_verdict() {
     let claim = Claim::new(b"test claim");
     let verdict1 = verify_once(&claim).unwrap();
-    
+
     // Wait a bit
     std::thread::sleep(std::time::Duration::from_millis(100));
-    
+
     let verdict2 = verify_once(&claim).unwrap();
-    
+
     // Transcripts should be different (different seeds)
-    assert_ne!(verdict1.transcript(), verdict2.transcript(), "transcripts should be different");
-    
+    assert_ne!(
+        verdict1.transcript(),
+        verdict2.transcript(),
+        "transcripts should be different"
+    );
+
     // But both should be valid
     assert!(verdict1.is_valid_bool(), "verdict1 should be valid");
     assert!(verdict2.is_valid_bool(), "verdict2 should be valid");
@@ -193,20 +218,23 @@ fn stress_test_no_logging_violations() {
     // This test verifies that veil7 doesn't log anything
     // We can't directly test for logging, but we can verify that
     // the library doesn't panic or produce unexpected output
-    
+
     let claim = Claim::new(b"test claim");
     let result = verify_once(&claim);
-    
+
     // Should succeed without panic
     assert!(result.is_ok(), "should succeed without panic");
-    
+
     let verdict = result.unwrap();
-    
+
     // Should produce valid verdict
     assert!(verdict.is_valid_bool(), "should produce valid verdict");
-    
+
     // Should produce non-zero transcript
-    assert!(!verdict.transcript().iter().all(|&b| b == 0), "transcript should not be all zeros");
+    assert!(
+        !verdict.transcript().iter().all(|&b| b == 0),
+        "transcript should not be all zeros"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -227,7 +255,7 @@ fn stress_test_rapid_successive_calls() {
 #[test]
 fn stress_test_concurrent_calls() {
     use std::thread;
-    
+
     let handles: Vec<_> = (0..10)
         .map(|i| {
             thread::spawn(move || {
@@ -238,7 +266,7 @@ fn stress_test_concurrent_calls() {
             })
         })
         .collect();
-    
+
     for handle in handles {
         handle.join().unwrap();
     }
@@ -249,14 +277,14 @@ fn stress_test_deterministic_with_same_seed() {
     // Test that same seed produces same keys
     use veil7::l1_entropy::Seed;
     use veil7::l2_keygen::derive_keys;
-    
+
     let seed_bytes = [0x42u8; 64];
     let seed1 = Seed::from_bytes(&seed_bytes);
     let seed2 = Seed::from_bytes(&seed_bytes);
-    
+
     let keys1 = derive_keys(&seed1).unwrap();
     let keys2 = derive_keys(&seed2).unwrap();
-    
+
     // Should produce same keys
     let pk1 = veil7::pq_backends::libcrux_backend::kem_pk_bytes(&keys1.kem_kp);
     let pk2 = veil7::pq_backends::libcrux_backend::kem_pk_bytes(&keys2.kem_kp);
@@ -267,16 +295,16 @@ fn stress_test_deterministic_with_same_seed() {
 fn stress_test_different_seeds_different_keys() {
     use veil7::l1_entropy::Seed;
     use veil7::l2_keygen::derive_keys;
-    
+
     let seed1_bytes = [0x42u8; 64];
     let seed2_bytes = [0x43u8; 64];
-    
+
     let seed1 = Seed::from_bytes(&seed1_bytes);
     let seed2 = Seed::from_bytes(&seed2_bytes);
-    
+
     let keys1 = derive_keys(&seed1).unwrap();
     let keys2 = derive_keys(&seed2).unwrap();
-    
+
     // Should produce different keys
     let pk1 = veil7::pq_backends::libcrux_backend::kem_pk_bytes(&keys1.kem_kp);
     let pk2 = veil7::pq_backends::libcrux_backend::kem_pk_bytes(&keys2.kem_kp);
@@ -293,8 +321,8 @@ fn stress_test_full_pipeline_integration() {
     let large_claim = vec![0x42u8; 1024];
     let all_zeros = vec![0u8; 1024];
     let all_ones = vec![0xFFu8; 1024];
-    
-    let test_cases = vec![
+
+    let test_cases = [
         b"".as_slice(),
         b"short".as_slice(),
         b"medium length claim for testing".as_slice(),
@@ -302,14 +330,18 @@ fn stress_test_full_pipeline_integration() {
         &all_zeros,
         &all_ones,
     ];
-    
+
     for (i, claim_bytes) in test_cases.iter().enumerate() {
         let claim = Claim::new(claim_bytes);
         let result = verify_once(&claim);
         assert!(result.is_ok(), "test case {} should succeed", i);
-        
+
         let verdict = result.unwrap();
         assert!(verdict.is_valid_bool(), "test case {} should be valid", i);
-        assert!(!verdict.transcript().iter().all(|&b| b == 0), "test case {} should have non-zero transcript", i);
+        assert!(
+            !verdict.transcript().iter().all(|&b| b == 0),
+            "test case {} should have non-zero transcript",
+            i
+        );
     }
 }

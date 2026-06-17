@@ -136,22 +136,22 @@ impl Verdict {
 /// - Follows "refuse > guess" philosophy
 pub fn validate_verdict(verdict: &Verdict) -> Result<(), crate::VeilError> {
     let valid_value = verdict.valid.unwrap_u8();
-    
+
     // Check Choice is valid (0 or 1)
     if valid_value != 0 && valid_value != 1 {
         return Err(crate::VeilError::Crypto);
     }
-    
+
     // Check transcript is not all zeros
     if verdict.transcript.iter().all(|&b| b == 0) {
         return Err(crate::VeilError::Crypto);
     }
-    
+
     // Check transcript is not all ones
     if verdict.transcript.iter().all(|&b| b == 0xFF) {
         return Err(crate::VeilError::Crypto);
     }
-    
+
     Ok(())
 }
 
@@ -169,13 +169,13 @@ pub fn validate_verdict(verdict: &Verdict) -> Result<(), crate::VeilError> {
 /// - Follows "math over abstraction" philosophy
 pub fn validate_verdict_strength(verdict: &Verdict) -> Result<(), crate::VeilError> {
     let transcript = &verdict.transcript;
-    
+
     // Check for obvious bias (all bytes same value)
     let first_byte = transcript[0];
     if transcript.iter().all(|&b| b == first_byte) {
         return Err(crate::VeilError::Crypto);
     }
-    
+
     // Check for low entropy (less than 4 unique byte values)
     let mut unique_bytes = [false; 256];
     let mut unique_count = 0;
@@ -185,11 +185,11 @@ pub fn validate_verdict_strength(verdict: &Verdict) -> Result<(), crate::VeilErr
             unique_count += 1;
         }
     }
-    
+
     if unique_count < 4 {
         return Err(crate::VeilError::Crypto);
     }
-    
+
     Ok(())
 }
 
@@ -205,10 +205,7 @@ pub fn validate_verdict_strength(verdict: &Verdict) -> Result<(), crate::VeilErr
 /// - Defence-in-depth (multiple sources)
 /// - Additional binding beyond original verdict
 /// - Follows "defence-in-depth" philosophy
-pub fn verdict_multi_source(
-    verdict: &Verdict,
-    additional_context: &[u8],
-) -> Verdict {
+pub fn verdict_multi_source(verdict: &Verdict, additional_context: &[u8]) -> Verdict {
     let mut xof = Shake256::default();
     xof.update(domain::TRANSCRIPT);
     xof.update(verdict.transcript());
@@ -216,7 +213,7 @@ pub fn verdict_multi_source(
     let mut new_transcript = [0u8; 32];
     let mut reader = xof.finalize_xof();
     reader.read(&mut new_transcript);
-    
+
     compiler_fence(Ordering::SeqCst);
     Verdict {
         valid: verdict.valid,
@@ -255,6 +252,7 @@ pub fn verdict_multi_source(
 /// - Follows "crypto-agility" philosophy
 ///
 /// **Note:** Future work. Only basic verdict currently supported.
+#[allow(clippy::new_ret_no_self)]
 pub trait VerdictScheme {
     fn new(valid: Choice, commitment: &Commitment) -> Verdict;
 }
@@ -366,8 +364,8 @@ mod tests {
     fn validate_verdict_strength_rejects_low_entropy() {
         let mut transcript = [0u8; 32];
         // Only 2 unique byte values (low entropy)
-        for i in 0..32 {
-            transcript[i] = if i % 2 == 0 { 0x00 } else { 0x01 };
+        for (i, item) in transcript.iter_mut().enumerate() {
+            *item = if i % 2 == 0 { 0x00 } else { 0x01 };
         }
         let v = Verdict {
             valid: Choice::from(1u8),
@@ -382,12 +380,12 @@ mod tests {
         let keys = derive_keys(&seed).unwrap();
         let c = commit(&keys, b"claim");
         let v = Verdict::new(Choice::from(1u8), &c);
-        
+
         let v_multi = verdict_multi_source(&v, b"additional context");
-        
+
         // Transcript should be different
         assert_ne!(v.transcript(), v_multi.transcript());
-        
+
         // Validity should be preserved
         assert_eq!(v.valid.unwrap_u8(), v_multi.valid.unwrap_u8());
     }
@@ -397,10 +395,10 @@ mod tests {
         let seed = fake_seed();
         let keys = derive_keys(&seed).unwrap();
         let c = commit(&keys, b"claim");
-        
+
         let v1 = Verdict::new(Choice::from(1u8), &c);
         let v2 = BasicVerdictScheme::new(Choice::from(1u8), &c);
-        
+
         // Should produce same verdict
         assert_eq!(v1.transcript(), v2.transcript());
         assert_eq!(v1.valid.unwrap_u8(), v2.valid.unwrap_u8());

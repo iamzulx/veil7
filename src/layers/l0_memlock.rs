@@ -500,28 +500,28 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn locked_memory_usage_tracking() {
-        let initial_usage = get_locked_memory_usage();
+        let _initial_usage = get_locked_memory_usage();
 
         {
             let _l1: Locked<64> = Locked::new();
-            let usage_after_1 = get_locked_memory_usage();
+            let _usage_after_1 = get_locked_memory_usage();
             // Usage should increase (if mlock succeeded)
             // On Android/Termux, mlock fails, so usage stays the same
             #[cfg(not(target_os = "android"))]
-            assert!(usage_after_1 >= initial_usage);
+            assert!(_usage_after_1 >= initial_usage);
 
             let _l2: Locked<128> = Locked::new();
-            let usage_after_2 = get_locked_memory_usage();
+            let _usage_after_2 = get_locked_memory_usage();
             // Usage should increase further (if mlock succeeded)
             #[cfg(not(target_os = "android"))]
-            assert!(usage_after_2 >= usage_after_1);
+            assert!(_usage_after_2 >= usage_after_1);
         }
 
         // After drop, usage should return to initial (if mlock succeeded)
-        let final_usage = get_locked_memory_usage();
+        let _final_usage = get_locked_memory_usage();
         #[cfg(not(target_os = "android"))]
         assert_eq!(
-            final_usage, initial_usage,
+            _final_usage, initial_usage,
             "usage must return to initial after drop"
         );
     }
