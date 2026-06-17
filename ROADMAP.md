@@ -1,7 +1,7 @@
 # veil7 → Production Roadmap
 
 > **Status:** Research-grade prototype. NOT production-ready.
-> **Last updated:** 2026-06-15
+> **Last updated:** 2026-06-17
 
 ---
 
@@ -50,7 +50,7 @@ To reach production, **4 phases** must be completed.
 - `src/layers/l5_verify.rs` — verify + KEM roundtrip via libcrux
 - `src/layers/l6_zeroise.rs` — explicit scrub barrier
 - `src/layers/l7_emit.rs` — transcript emission (Verdict type)
-- 309/309 tests pass (all layers verified end-to-end)
+- 323/323 tests pass (all layers verified end-to-end)
 - fmt clean, clippy clean, no_std clean, release build clean
 
 ### 1.9 — Layer 4 Enhancements (HIGH + MEDIUM) ✅ COMPLETE
@@ -314,26 +314,6 @@ NIST provides **test vectors** (ACVP) for FIPS 203/204/205.
 - `tests/vectors/` — raw NIST test vector files stored for reference
 - Source: BoringSSL (Google) → usnistgov/ACVP-Server
 
-### 1.3 — Layer 2 Enhancements (HIGH + MEDIUM)
-
-**Status:** ✅ COMPLETE — All enhancements implemented and tested
-
-**HIGH Priority:**
-- ✅ Key Validation (`validate_keys`) — validates keys before use
-- ✅ Key Strength Validation (`validate_key_strength`) — verifies key strength meets FIPS requirements
-
-**MEDIUM Priority:**
-- ✅ HKDF-SHA256 (`derive_hkdf`) — stronger KDF per NIST SP 800-56C
-- ✅ Crypto-Agility (`KeyGenerator` trait) — allows algorithm swapping
-- ✅ Key Isolation — documented as future enhancement (requires Locked<> changes)
-- ✅ Key Derivation Multi-Source (`derive_keys_multi_source`) — XOR-based redundancy
-- ✅ Key Compromise Detection — documented with philosophy conflict reasoning
-
-**Test Coverage:**
-- 12 tests in l2_keygen (was 5, added 7)
-- All tests passing: 12/12
-- Tests cover: validation, HKDF, crypto-agility, multi-source derivation
-
 ### 1.3 — Supply Chain Security (HIGH 🟠)
 
 **Status:** ✅ COMPLETE
@@ -550,15 +530,17 @@ NIST provides **test vectors** (ACVP) for FIPS 203/204/205.
 [x] cargo vet in CI (initial run, continue-on-error)
 [x] Miri in CI (nightly, -Zmiri-disable-isolation)
 [ ] dudect validation on target hardware
-[x] All tests passing (314/314)
+[x] All tests passing (323/323)
 [x] All Phase 1-4 actionable items complete (14/18)
-[x] Fuzzing setup (15 targets, 60s CI, increase to 72h before release)
+[x] Fuzzing setup (17 targets, 60s CI, increase to 72h before release)
 [x] Documented cryptographic policy (CRYPTO_POLICY.md)
 [ ] Signed release binaries
 [x] SBOM generated (CycloneDX, 61 dependencies)
 [x] Dependabot configured + managed
 [x] CI: Node.js 24 opt-in, SBOM job, Miri, cargo-vet
 [x] All heap-allocated secrets have Drop impls (11/11 types)
+[x] Zero panic paths in library production code (unreachable!/unwrap!/panic! eliminated)
+[x] Philosophy hardening: unreachable→wipe_state(), unwrap→manual loops
 ```
 
 ### Production Certification (Nice-to-Have)
@@ -575,26 +557,9 @@ NIST provides **test vectors** (ACVP) for FIPS 203/204/205.
 
 ## Future Work
 
-### Layer Deep Dives (Documentation)
+### ~~Layer Deep Dives (Documentation)~~ ✅ DONE
 
-Detailed documentation untuk each layer (deferred for future):
-
-- **Layer 0 (l0_memlock)** — Memory locking and zeroization primitives
-- **Layer 1 (l1_entropy)** — Entropy harvesting and health testing
-- **Layer 2 (l2_keygen)** — Ephemeral key generation (libcrux)
-- **Layer 3 (l3_commit)** — Commitment generation
-- **Layer 4 (l4_prove)** — Proof generation
-- **Layer 5 (l5_verify)** — Verification
-- **Layer 6 (l6_zeroise)** — Zeroization barrier
-- **Layer 7 (l7_emit)** — Transcript emission
-
-Each layer documentation will include:
-- Architecture diagram
-- Security properties
-- Threat model
-- Implementation details
-- Test coverage
-- Performance characteristics
+All 8 layer documents completed (see Phase 1.13 above).
 
 ---
 
@@ -623,3 +588,6 @@ Each layer documentation will include:
 | 2026-06-14 | ✅ Phase 4.1: WASM build (libc gated), Docker, signed releases. |
 | 2026-06-14 | ✅ Phase 4.2: Monitoring (metrics, alerting, Prometheus). |
 | 2026-06-14 | ✅ Documentation polish: all docs updated, 375 tests, 12.8K lines. |
+| 2026-06-17 | ✅ Phase 1+: cargo fmt + clippy clean (6 files, 0 warnings). |
+| 2026-06-17 | ✅ Phase 1+: Panic-free hardening — unreachable→wipe, unwrap→manual loops. |
+| 2026-06-17 | ✅ Phase 1+: Docs sync — CHANGELOG, L1_LAYER, SPEC-HARDENING, ROADMAP updated. |
