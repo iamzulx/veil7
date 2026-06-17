@@ -31,7 +31,7 @@
 
 extern crate alloc;
 use alloc::boxed::Box;
-use core::sync::atomic::{compiler_fence, AtomicUsize, Ordering};
+use core::sync::atomic::{compiler_fence, fence, AtomicUsize, Ordering};
 
 #[cfg(feature = "std")]
 extern crate libc;
@@ -167,6 +167,7 @@ pub(crate) fn zeroize_bytes(bytes: &mut [u8]) {
         }
     }
     compiler_fence(Ordering::SeqCst);
+    fence(Ordering::SeqCst);
 }
 
 /// Wipe a raw memory range with volatile stores plus a compiler fence.
@@ -187,6 +188,7 @@ pub(crate) fn zeroize_ptr(ptr: *mut u8, len: usize) {
         }
     }
     compiler_fence(Ordering::SeqCst);
+    fence(Ordering::SeqCst);
 }
 
 /// Wipe a byte slice in place using volatile stores.
@@ -247,6 +249,73 @@ pub(crate) fn poison_bytes(bytes: &mut [u8]) {
         }
     }
     compiler_fence(Ordering::SeqCst);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Stack Canary Validation (Buffer Overflow Detection)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Canary value for stack-based buffer overflow detection.
+///
+/// This constant is planted into a stack buffer and validated after
+/// sensitive operations to detect stack smashing (CWE-121).
+#[allow(dead_code)]
+const CANARY_VALUE: u64 = 0xDEADBEEFCAFEBABE;
+
+/// Plant a stack canary by writing `CANARY_VALUE` bytes into the buffer
+/// using volatile writes to prevent elision.
+///
+/// # Security
+/// The canary is placed on the stack adjacent to sensitive buffers so that
+/// a buffer overflow will corrupt it before reaching return addresses.
+#[inline(never)]
+#[allow(dead_code)]
+pub(crate) fn plant_stack_canary(canary: &mut [u8; 8]) {
+    let val = CANARY_VALUE.to_ne_bytes();
+    for (c, v) in canary.iter_mut().zip(val.iter()) {
+        // SAFETY: `canary` is a valid, uniquely borrowed 8-byte buffer.
+        unsafe {
+            core::ptr::write_volatile(c as *mut u8, *v);
+        }
+    }
+    compiler_fence(Ordering::SeqCst);
+}
+
+/// Validate a stack canary by reading bytes with volatile reads and
+/// comparing against `CANARY_VALUE`.
+///
+/// Returns `true` if the canary is intact, `false` if corrupted
+/// (indicating a buffer overflow was detected).
+#[inline(never)]
+#[allow(dead_code)]
+pub(crate) fn validate_stack_canary(canary: &[u8; 8]) -> bool {
+    compiler_fence(Ordering::SeqCst);
+    let mut buf = [0u8; 8];
+    for (b, slot) in canary.iter().zip(buf.iter_mut()) {
+        // SAFETY: `canary` is a valid, borrowed 8-byte buffer.
+        unsafe {
+            *slot = core::ptr::read_volatile(b as *const u8);
+        }
+    }
+    buf == CANARY_VALUE.to_ne_bytes()
+}
+
+/// Wipe a stack canary buffer using volatile stores.
+///
+/// Called after validation to ensure the canary value does not linger
+/// on the stack after it has served its purpose.
+#[inline(never)]
+#[allow(dead_code)]
+pub(crate) fn wipe_stack_canary(canary: &mut [u8; 8]) {
+    compiler_fence(Ordering::SeqCst);
+    for c in canary.iter_mut() {
+        // SAFETY: `canary` is a valid, uniquely borrowed 8-byte buffer.
+        unsafe {
+            core::ptr::write_volatile(c as *mut u8, 0);
+        }
+    }
+    compiler_fence(Ordering::SeqCst);
+    fence(Ordering::SeqCst);
 }
 
 /// Zeroize and poison bytes (zeroize → poison → zeroize).
@@ -550,5 +619,37 @@ mod tests {
         let mut l: Locked<48> = Locked::new();
         l.as_mut_bytes()[0] = 0xFF;
         drop(l); // must not panic / double-free
+    }
+
+    #[test]
+    fn test_plant_and_validate_canary() {
+        let mut canary = [0u8; 8];
+        plant_stack_canary(&mut canary);
+        assert!(
+            validate_stack_canary(&canary),
+            "planted canary must validate"
+        );
+    }
+
+    #[test]
+    fn test_corrupted_canary_detected() {
+        let mut canary = [0u8; 8];
+        plant_stack_canary(&mut canary);
+        canary[3] ^= 0xFF; // corrupt one byte
+        assert!(
+            !validate_stack_canary(&canary),
+            "corrupted canary must fail validation"
+        );
+    }
+
+    #[test]
+    fn test_wipe_canary() {
+        let mut canary = [0u8; 8];
+        plant_stack_canary(&mut canary);
+        wipe_stack_canary(&mut canary);
+        assert!(
+            !validate_stack_canary(&canary),
+            "wiped canary must fail validation"
+        );
     }
 }

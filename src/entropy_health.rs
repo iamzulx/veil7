@@ -40,16 +40,16 @@ pub fn repetition_count_test(samples: &[u8], cutoff: usize) -> bool {
     }
 
     let mut count = 1usize;
-    let mut most_common = samples[0];
+    let mut prev = samples[0];
 
     for &sample in &samples[1..] {
-        if sample == most_common {
+        if sample == prev {
             count += 1;
             if count >= cutoff {
                 return false; // Stuck source detected
             }
         } else {
-            most_common = sample;
+            prev = sample;
             count = 1;
         }
     }
@@ -319,5 +319,14 @@ mod tests {
     fn monitor_entropy_quality_fails_on_bad_entropy() {
         let samples = vec![0x42u8; 1000]; // Stuck source
         assert!(monitor_entropy_quality(&samples, 6.0).is_err());
+    }
+
+    #[test]
+    fn test_rct_detects_stuck_source() {
+        let samples = [0xAAu8; 100]; // 100 identical bytes
+        assert!(
+            !repetition_count_test(&samples, 10),
+            "stuck source must be detected when cutoff=10"
+        );
     }
 }

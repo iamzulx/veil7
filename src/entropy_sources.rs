@@ -479,6 +479,127 @@ pub fn hw_counter() -> EntropySource {
     )
 }
 
+/// Hardware random number generator entropy source.
+///
+/// Uses RDRAND (x86_64) or RNDR (aarch64) if available.
+/// Falls back to empty (zero entropy contribution) if hardware
+/// RNG is not available — the other sources still provide entropy.
+///
+/// This is a defence-in-depth source: hardware RNG is fast and
+/// high-quality, but we don't depend on it.
+#[cfg(feature = "std")]
+pub fn hardware_rng() -> EntropySource {
+    let mut raw = [0u8; SOURCE_LEN];
+    let mut filled = 0usize;
+
+    // Try to read 8 x u64 = 64 bytes from hardware RNG
+    for chunk in raw.chunks_mut(8) {
+        match hw_random_u64() {
+            Ok(val) => {
+                let bytes = val.to_le_bytes();
+                chunk.copy_from_slice(&bytes);
+                filled += 8;
+            }
+            Err(_) => break,
+        }
+    }
+
+    if filled == 0 {
+        // Hardware RNG not available — return zero-entropy source
+        // (other sources compensate)
+        return EntropySource::from_raw(
+            "hw_rng_unavailable",
+            domain::ENTROPY_SOURCE_HW_COUNTER,
+            [0u8; SOURCE_LEN],
+        );
+    }
+
+    // Mix with domain tag
+    let mut xof = Shake256::default();
+    xof.update(b"veil7:L1:src:hw-rng:v1");
+    xof.update(&raw);
+    xof.finalize_xof().read(&mut raw);
+
+    EntropySource::from_raw("hw_rng", domain::ENTROPY_SOURCE_HW_COUNTER, raw)
+}
+
+/// Try to read a u64 from the hardware random number generator.
+/// Returns `Ok(val)` if hardware RNG is available, `Err` otherwise.
+fn hw_random_u64() -> Result<u64, ()> {
+    #[cfg(target_arch = "x86_64")]
+    {
+        hw_rdrand64()
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        hw_rndr64()
+    }
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    {
+        Err(())
+    }
+}
+
+/// RDRAND — x86_64 hardware random number.
+#[cfg(target_arch = "x86_64")]
+#[allow(unsafe_code)]
+fn hw_rdrand64() -> Result<u64, ()> {
+    let val: u64;
+    let ok: u8;
+    unsafe {
+        core::arch::asm!(
+            "rdrand {val}",
+            "setc {ok}",
+            val = out(reg) val,
+            ok = out(reg_byte) ok,
+            options(nomem, nostack),
+        );
+    }
+    if ok != 0 {
+        Ok(val)
+    } else {
+        Err(())
+    }
+}
+
+/// RNDR — aarch64 hardware random number (ARMv8.5-A FEAT_RNG).
+/// Only available when std is enabled (for HWCAP feature detection).
+#[cfg(all(target_arch = "aarch64", feature = "std"))]
+#[allow(unsafe_code)]
+fn hw_rndr64() -> Result<u64, ()> {
+    // Check if FEAT_RNG is available via HWCAP before attempting the
+    // RNDR instruction. Without this check, the mrs instruction for
+    // an unsupported system register will trap with SIGILL.
+    const HWCAP_RNG: libc::c_ulong = 1 << 27;
+    let hwcap = unsafe { libc::getauxval(libc::AT_HWCAP) };
+    if hwcap & HWCAP_RNG == 0 {
+        return Err(());
+    }
+    let val: u64;
+    let nzcv: u64;
+    unsafe {
+        core::arch::asm!(
+            "mrs {val}, s3_3_c2_c4_0",
+            "mrs {out}, nzcv",
+            val = out(reg) val,
+            out = out(reg) nzcv,
+            options(nomem, nostack),
+        );
+    }
+    // Z flag (bit 30) = 1 means failure
+    if (nzcv & (1 << 30)) == 0 {
+        Ok(val)
+    } else {
+        Err(())
+    }
+}
+
+/// aarch64 no_std stub: cannot detect CPU features without OS support.
+#[cfg(all(target_arch = "aarch64", not(feature = "std")))]
+fn hw_rndr64() -> Result<u64, ()> {
+    Err(())
+}
+
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -585,5 +706,18 @@ mod tests {
             assert!(!s.domain_tag().is_empty(), "source {i} has empty tag");
             assert_eq!(s.raw().len(), SOURCE_LEN);
         }
+    }
+
+    #[test]
+    fn test_hw_rng_source() {
+        let s = hardware_rng();
+        // Name is either "hw_rng" (hardware available) or "hw_rng_unavailable"
+        assert!(
+            s.name() == "hw_rng" || s.name() == "hw_rng_unavailable",
+            "unexpected hw_rng source name: {}",
+            s.name()
+        );
+        assert!(!s.domain_tag().is_empty(), "hw_rng must have a domain tag");
+        assert_eq!(s.raw().len(), SOURCE_LEN, "hw_rng raw must be SOURCE_LEN");
     }
 }

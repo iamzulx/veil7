@@ -221,6 +221,31 @@ pub fn verdict_multi_source(verdict: &Verdict, additional_context: &[u8]) -> Ver
     }
 }
 
+/// Blind a verdict with a random factor for deniability.
+///
+/// Two blinded verdicts for the same claim produce different
+/// transcripts, preventing correlation. The validity bit is
+/// preserved (blinded to the same value).
+///
+/// This is optional — callers who want deniability pass their
+/// verdict through this function before emitting it. The blinding
+/// factor is NOT stored in the verdict (no metadata).
+///
+/// Follows "absolute privacy" philosophy.
+pub fn verdict_blind(verdict: &Verdict, blinding: &[u8; 32]) -> Verdict {
+    let mut xof = Shake256::default();
+    xof.update(b"veil7:L7:blinding:v1");
+    xof.update(verdict.transcript());
+    xof.update(blinding);
+    let mut new_transcript = [0u8; 32];
+    xof.finalize_xof().read(&mut new_transcript);
+    compiler_fence(Ordering::SeqCst);
+    Verdict {
+        valid: verdict.valid,
+        transcript: new_transcript,
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MEDIUM PRIORITY ENHANCEMENTS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -402,5 +427,56 @@ mod tests {
         // Should produce same verdict
         assert_eq!(v1.transcript(), v2.transcript());
         assert_eq!(v1.valid.unwrap_u8(), v2.valid.unwrap_u8());
+    }
+
+    #[test]
+    fn test_verdict_blind_makes_different_transcripts() {
+        let seed = fake_seed();
+        let keys = derive_keys(&seed).unwrap();
+        let c = commit(&keys, b"claim");
+        let v = Verdict::new(Choice::from(1u8), &c);
+
+        let blinding_a = [0x11u8; 32];
+        let blinding_b = [0x22u8; 32];
+
+        let v_a = verdict_blind(&v, &blinding_a);
+        let v_b = verdict_blind(&v, &blinding_b);
+
+        assert_ne!(
+            v_a.transcript(),
+            v_b.transcript(),
+            "different blinding factors must produce different transcripts"
+        );
+        assert_ne!(
+            v.transcript(),
+            v_a.transcript(),
+            "blinded transcript must differ from original"
+        );
+    }
+
+    #[test]
+    fn test_verdict_blind_preserves_validity() {
+        let seed = fake_seed();
+        let keys = derive_keys(&seed).unwrap();
+        let c = commit(&keys, b"claim");
+
+        let v_valid = Verdict::new(Choice::from(1u8), &c);
+        let v_invalid = Verdict::new(Choice::from(0u8), &c);
+
+        let blinding = [0x42u8; 32];
+
+        let b_valid = verdict_blind(&v_valid, &blinding);
+        let b_invalid = verdict_blind(&v_invalid, &blinding);
+
+        assert_eq!(
+            v_valid.valid.unwrap_u8(),
+            b_valid.valid.unwrap_u8(),
+            "blinding must preserve valid verdict"
+        );
+        assert_eq!(
+            v_invalid.valid.unwrap_u8(),
+            b_invalid.valid.unwrap_u8(),
+            "blinding must preserve invalid verdict"
+        );
     }
 }

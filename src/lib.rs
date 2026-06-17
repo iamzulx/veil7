@@ -28,6 +28,7 @@ extern crate alloc;
 //   relations/  NP-relation trait + concrete relations (hash preimage, merkle, ML-DSA)
 //   pq_backends/  formal PQ signature backends (SLH-DSA, …)
 //
+pub mod audit;
 pub mod blind;
 pub mod chain;
 pub mod commit_reveal;
