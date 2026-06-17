@@ -508,20 +508,20 @@ mod tests {
             // Usage should increase (if mlock succeeded)
             // On Android/Termux, mlock fails, so usage stays the same
             #[cfg(not(target_os = "android"))]
-            assert!(_usage_after_1 >= initial_usage);
+            assert!(_usage_after_1 >= _initial_usage);
 
             let _l2: Locked<128> = Locked::new();
             let _usage_after_2 = get_locked_memory_usage();
             // Usage should increase further (if mlock succeeded)
             #[cfg(not(target_os = "android"))]
-            assert!(_usage_after_2 >= usage_after_1);
+            assert!(_usage_after_2 >= _usage_after_1);
         }
 
         // After drop, usage should return to initial (if mlock succeeded)
         let _final_usage = get_locked_memory_usage();
         #[cfg(not(target_os = "android"))]
         assert_eq!(
-            _final_usage, initial_usage,
+            _final_usage, _initial_usage,
             "usage must return to initial after drop"
         );
     }
