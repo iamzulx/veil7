@@ -111,7 +111,7 @@ jobs:
         run: |
           # Run each fuzz target for 60 seconds
           # In production, increase to 72h+ before release
-          for target in fuzz_verify_once fuzz_attest_bytes fuzz_chain_root fuzz_chain_verify fuzz_shake256 fuzz_shamir fuzz_oram fuzz_merkle fuzz_microvm fuzz_hash_preimage fuzz_pedersen fuzz_range_proof fuzz_batch_verify fuzz_blind_attest fuzz_commit_reveal; do
+          for target in fuzz_verify_once fuzz_attest_bytes fuzz_chain_root fuzz_chain_verify fuzz_shake256 fuzz_shamir fuzz_oram fuzz_merkle fuzz_microvm fuzz_hash_preimage fuzz_pedersen fuzz_range_proof fuzz_batch_verify fuzz_blind_attest fuzz_commit_reveal fuzz_kem_roundtrip fuzz_dsa_sign_verify fuzz_threshold fuzz_chain_builder fuzz_keccak_ct fuzz_interface_facade fuzz_verify_once_oram fuzz_verify_once_vm fuzz_merkle_verify fuzz_bytecode_builder; do
             echo "=== Fuzzing $target (300s) ==="
             cargo fuzz run $target -- -max_total_time=300 -max_len=4096 || true
           done
@@ -154,28 +154,76 @@ jobs:
         run: cargo install kani-verifier
       - name: Run Kani proofs
         run: |
-          cargo kani --harness prove_zeroize_bytes_zeros_all
-          cargo kani --harness prove_zeroize_bytes_empty_no_panic
-          cargo kani --harness prove_shake256_reader_no_panic_on_overflow
-          cargo kani --harness prove_gf256_mul_defined_for_all_inputs
-          cargo kani --harness prove_gf256_inv_defined_for_nonzero
-          cargo kani --harness prove_shamir_split_valid_params
-          cargo kani --harness prove_shamir_split_rejects_invalid
-          cargo kani --harness prove_ct_shake256_counter_increments
-          cargo kani --harness prove_kem_keygen_valid_sizes
-          cargo kani --harness prove_kem_roundtrip_matches
-          cargo kani --harness prove_dsa_keygen_valid_sizes
-          cargo kani --harness prove_dsa_sign_verify_roundtrip
+          cargo kani --harness prove_blind_claim_involution
+          cargo kani --harness prove_blind_factor_zeroizes_on_drop
           cargo kani --harness prove_chain_root_non_empty
           cargo kani --harness prove_chain_verify_accepts_valid
-          cargo kani --harness prove_merkle_root_non_empty
-          cargo kani --harness prove_transcript_domain_separation
-          cargo kani --harness prove_microvm_no_panic_on_arbitrary
-          cargo kani --harness prove_locked_fill_from_rejects_oversized
-          cargo kani --harness prove_blind_claim_involution
+          cargo kani --harness prove_chain_verify_returns_choice_consistently
+          cargo kani --harness prove_choice_bitwise_and_no_panic
+          cargo kani --harness prove_choice_construction_no_panic
           cargo kani --harness prove_commit_reveal_binding
-          cargo kani --harness prove_threshold_verify_safety
+          cargo kani --harness prove_commitment_deterministic
+          cargo kani --harness prove_commitment_different_claims_different_outputs
+          cargo kani --harness prove_commitment_token_zeroizes_on_drop
+          cargo kani --harness prove_ct_shake256_counter_increments
+          cargo kani --harness prove_ct_shake256_zeroizes_on_drop
+          cargo kani --harness prove_dsa_keygen_valid_sizes
+          cargo kani --harness prove_dsa_sign_verify_roundtrip
+          cargo kani --harness prove_entropy_health_no_panic
+          cargo kani --harness prove_entropy_source_whiten_deterministic
+          cargo kani --harness prove_entropy_source_zeroizes_on_drop
+          cargo kani --harness prove_entropy_sources_non_zero
+          cargo kani --harness prove_ephemeral_keys_zeroizes_on_drop
+          cargo kani --harness prove_full_pipeline_invalid_claim
+          cargo kani --harness prove_full_pipeline_no_panic
+          cargo kani --harness prove_full_pipeline_valid_claim
+          cargo kani --harness prove_gf256_inv_defined_for_nonzero
+          cargo kani --harness prove_gf256_mul_defined_for_all_inputs
+          cargo kani --harness prove_hash_preimage_proof_zeroizes_on_drop
+          cargo kani --harness prove_hash_preimage_verify_deterministic
+          cargo kani --harness prove_hash_preimage_witness_zeroizes_on_drop
+          cargo kani --harness prove_kem_keygen_valid_sizes
+          cargo kani --harness prove_kem_roundtrip_matches
+          cargo kani --harness prove_keygen_deterministic
+          cargo kani --harness prove_keygen_different_seeds_different_keys
+          cargo kani --harness prove_l4_proof_zeroizes_on_drop
+          cargo kani --harness prove_locked_fill_from_rejects_oversized
+          cargo kani --harness prove_locked_zeroizes_on_drop
+          cargo kani --harness prove_merkle_proof_zeroizes_on_drop
+          cargo kani --harness prove_merkle_root_non_empty
+          cargo kani --harness prove_merkle_verify_deterministic
+          cargo kani --harness prove_merkle_witness_zeroizes_on_drop
+          cargo kani --harness prove_microvm_no_panic_on_arbitrary
+          cargo kani --harness prove_microvm_zeroizes_on_drop
+          cargo kani --harness prove_ml_dsa_proof_zeroizes_on_drop
+          cargo kani --harness prove_ml_dsa_witness_zeroizes_on_drop
+          cargo kani --harness prove_oblivious_ram_zeroizes_on_drop
           cargo kani --harness prove_oram_rmw_correctness
+          cargo kani --harness prove_pedersen_proof_zeroizes_on_drop
+          cargo kani --harness prove_pedersen_verify_deterministic
+          cargo kani --harness prove_pedersen_witness_zeroizes_on_drop
+          cargo kani --harness prove_pipeline_verify_returns_choice
+          cargo kani --harness prove_proof_generation_no_panic
+          cargo kani --harness prove_range_proof_proof_zeroizes_on_drop
+          cargo kani --harness prove_range_proof_witness_zeroizes_on_drop
+          cargo kani --harness prove_seed_zeroizes_on_drop
+          cargo kani --harness prove_shake256_reader_no_panic_on_overflow
+          cargo kani --harness prove_shake256_reader_zeroizes_on_drop
+          cargo kani --harness prove_shake256_zeroizes_on_drop
+          cargo kani --harness prove_shamir_split_rejects_invalid
+          cargo kani --harness prove_shamir_split_valid_params
+          cargo kani --harness prove_share_zeroizes_on_drop
+          cargo kani --harness prove_threshold_proof_zeroizes_on_drop
+          cargo kani --harness prove_threshold_verify_safety
+          cargo kani --harness prove_threshold_witness_zeroizes_on_drop
+          cargo kani --harness prove_transcript_domain_separation
+          cargo kani --harness prove_transcript_emission_no_panic
+          cargo kani --harness prove_verdict_is_valid_bool_correct
+          cargo kani --harness prove_verification_invalid_proof_fails
+          cargo kani --harness prove_verification_valid_proof_succeeds
+          cargo kani --harness prove_zeroize_bytes_empty_no_panic
+          cargo kani --harness prove_zeroize_bytes_zeros_all
+          cargo kani --harness prove_zeroizing_zeroizes_on_drop
         continue-on-error: true
         # continue-on-error: Kani is experimental; failures don't block CI
 
