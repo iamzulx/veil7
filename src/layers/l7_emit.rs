@@ -22,7 +22,7 @@ use crate::domain;
 use crate::l3_commit::Commitment;
 
 use crate::shake256::Shake256;
-use subtle::Choice;
+use subtle::{Choice, ConstantTimeEq};
 
 use core::fmt::Write;
 use core::sync::atomic::{compiler_fence, Ordering};
@@ -142,13 +142,13 @@ pub fn validate_verdict(verdict: &Verdict) -> Result<(), crate::VeilError> {
         return Err(crate::VeilError::Crypto);
     }
 
-    // Check transcript is not all zeros
-    if verdict.transcript.iter().all(|&b| b == 0) {
+    // Check transcript is not all zeros (constant-time)
+    if verdict.transcript.ct_eq(&[0u8; 32]).unwrap_u8() == 1 {
         return Err(crate::VeilError::Crypto);
     }
 
-    // Check transcript is not all ones
-    if verdict.transcript.iter().all(|&b| b == 0xFF) {
+    // Check transcript is not all ones (constant-time)
+    if verdict.transcript.ct_eq(&[0xFFu8; 32]).unwrap_u8() == 1 {
         return Err(crate::VeilError::Crypto);
     }
 
@@ -170,9 +170,10 @@ pub fn validate_verdict(verdict: &Verdict) -> Result<(), crate::VeilError> {
 pub fn validate_verdict_strength(verdict: &Verdict) -> Result<(), crate::VeilError> {
     let transcript = &verdict.transcript;
 
-    // Check for obvious bias (all bytes same value)
+    // Check for obvious bias (all bytes same value) — constant-time
     let first_byte = transcript[0];
-    if transcript.iter().all(|&b| b == first_byte) {
+    let filled = [first_byte; 32];
+    if transcript.ct_eq(&filled).unwrap_u8() == 1 {
         return Err(crate::VeilError::Crypto);
     }
 
