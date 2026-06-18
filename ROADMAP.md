@@ -400,10 +400,10 @@ NIST provides **test vectors** (ACVP) for FIPS 203/204/205.
 
 ### 2.3 — Formal Verification (MEDIUM 🟡)
 
-**Status:** ✅ SETUP COMPLETE — 22 Kani proof harnesses + CI job
+**Status:** ✅ COMPLETE — 70 Kani proof harnesses (25 Drop proofs + 7 constant-time proofs) + CI job
 
 ```
-- [x] Kani proof harnesses (proofs/kani_proofs.rs — 22 proofs)
+- [x] Kani proof harnesses (proofs/kani_proofs.rs — 70 proofs)
 - [x] Kani CI job (nightly Rust, continue-on-error)
 - [ ] Prove: no secret-dependent branches (needs expanded harnesses)
 - [ ] Prove: all secrets zeroized before scope exit (needs expanded harnesses)

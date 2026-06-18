@@ -1,12 +1,12 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
 
-/// Fuzz target for KEM encapsulate/decapsulate roundtrip.
-///
-/// Verifies that:
-/// - Encapsulation never panics on arbitrary input
-/// - Decapsulation never panics on arbitrary ciphertext
-/// - Roundtrip produces matching shared secrets (for valid keypairs)
+// Fuzz target for KEM encapsulate/decapsulate roundtrip.
+//
+// Verifies that:
+// - Encapsulation never panics on arbitrary input
+// - Decapsulation never panics on arbitrary ciphertext
+// - Roundtrip produces matching shared secrets (for valid keypairs)
 fuzz_target!(|data: &[u8]| {
     // Need at least 64 bytes for KEM seed
     if data.len() < 64 {

@@ -1,12 +1,12 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
 
-/// Fuzz target for DSA sign/verify roundtrip.
-///
-/// Verifies that:
-/// - Signing never panics on arbitrary input
-/// - Verification never panics on arbitrary signatures
-/// - Roundtrip produces valid signatures (for valid keypairs)
+// Fuzz target for DSA sign/verify roundtrip.
+//
+// Verifies that:
+// - Signing never panics on arbitrary input
+// - Verification never panics on arbitrary signatures
+// - Roundtrip produces valid signatures (for valid keypairs)
 fuzz_target!(|data: &[u8]| {
     // Need at least 32 bytes for DSA seed
     if data.len() < 32 {

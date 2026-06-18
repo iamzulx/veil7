@@ -113,3 +113,51 @@ name = "fuzz_dsa_sign_verify"
 path = "fuzz_targets/fuzz_dsa_sign_verify.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "fuzz_threshold"
+path = "fuzz_targets/fuzz_threshold.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_chain_builder"
+path = "fuzz_targets/fuzz_chain_builder.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_keccak_ct"
+path = "fuzz_targets/fuzz_keccak_ct.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_interface_facade"
+path = "fuzz_targets/fuzz_interface_facade.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_verify_once_oram"
+path = "fuzz_targets/fuzz_verify_once_oram.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_verify_once_vm"
+path = "fuzz_targets/fuzz_verify_once_vm.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_merkle_verify"
+path = "fuzz_targets/fuzz_merkle_verify.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_bytecode_builder"
+path = "fuzz_targets/fuzz_bytecode_builder.rs"
+test = false
+doc = false

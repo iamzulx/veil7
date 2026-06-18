@@ -15,7 +15,7 @@ fuzz_target!(|data: &[u8]| {
         pos += 2;
 
         match op % 5 {
-            0 => { oram.read(addr); }
+            0 => { let _ = oram.read(addr); }
             1 => {
                 let mut val = [0u8; 64];
                 let end = (pos + 64).min(data.len());
@@ -34,9 +34,9 @@ fuzz_target!(|data: &[u8]| {
             3 => {
                 let addr2 = if pos < data.len() { data[pos] as usize } else { 0 };
                 pos += 1;
-                oram.swap(addr, addr2);
+                let _ = oram.swap(addr, addr2);
             }
-            _ => { oram.read(addr); }
+            _ => { let _ = oram.read(addr); }
         }
     }
     // ORAM drops and zeroizes all slots
