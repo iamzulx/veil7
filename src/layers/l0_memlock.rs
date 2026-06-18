@@ -340,6 +340,7 @@ pub(crate) fn zeroize_and_poison(bytes: &mut [u8]) {
 
 /// Try to read a u64 from the hardware random number generator.
 /// Safe wrapper — all `unsafe` is confined here in l0_memlock.
+#[cfg(not(miri))]
 pub(crate) fn hw_random_u64() -> Result<u64, ()> {
     #[cfg(target_arch = "x86_64")]
     {
@@ -359,8 +360,14 @@ pub(crate) fn hw_random_u64() -> Result<u64, ()> {
     }
 }
 
+/// Miri stub: inline assembly cannot be emulated by Miri.
+#[cfg(miri)]
+pub(crate) fn hw_random_u64() -> Result<u64, ()> {
+    Err(())
+}
+
 /// RDRAND — x86_64 hardware random number.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(miri)))]
 fn hw_rdrand64() -> Result<u64, ()> {
     let val: u64;
     let ok: u8;
@@ -381,7 +388,7 @@ fn hw_rdrand64() -> Result<u64, ()> {
 }
 
 /// RNDR — aarch64 hardware random number (ARMv8.5-A FEAT_RNG).
-#[cfg(all(target_arch = "aarch64", feature = "std"))]
+#[cfg(all(target_arch = "aarch64", feature = "std", not(miri)))]
 fn hw_rndr64() -> Result<u64, ()> {
     const HWCAP_RNG: libc::c_ulong = 1 << 27;
     let hwcap = unsafe { libc::getauxval(libc::AT_HWCAP) };
